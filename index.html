@@ -78,6 +78,9 @@
   .contest-btn.live{animation:ctpulse 1.3s infinite;}
   @keyframes ctpulse{0%,100%{box-shadow:0 0 0 0 rgba(168,85,247,.55);}50%{box-shadow:0 0 0 11px rgba(168,85,247,0);}}
   @media(max-width:880px){.home-header{grid-template-columns:1fr;}.logo-home{width:60px;height:60px;}}
+  .lb-split{display:grid;grid-template-columns:1.35fr 1fr;gap:16px;margin-bottom:18px;align-items:stretch;}
+  .lb-split .card{margin-bottom:0;}
+  @media(max-width:880px){.lb-split{grid-template-columns:1fr;}}
 </style>
 </head>
 <body>
@@ -110,11 +113,8 @@
   <section id="view-home" class="hidden">
     <div class="home-header">
       <div class="card hh-side">
-        <div id="online-open" style="font-weight:800;color:var(--ok);cursor:pointer;text-align:center;">
-          <div style="font-size:22px;">🟢 현재 접속</div>
-          <div style="font-size:48px;line-height:1.15;"><span id="online-count">0</span>명</div>
-        </div>
-        <div style="color:var(--muted);font-size:14px;margin-top:8px;text-align:center;">클릭하면 명단을 봐요</div>
+        <div class="card-title" style="margin-bottom:8px;justify-content:center"><span>👑 난이도별 1위</span></div>
+        <div id="hof-scroll"><div id="hof-list"></div></div>
       </div>
       <div class="hh-center">
         <svg class="logo-home" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
@@ -133,8 +133,8 @@
         </div>
       </div>
       <div class="card hh-side">
-        <div class="card-title" style="margin-bottom:8px;justify-content:center"><span>👑 난이도별 1위</span></div>
-        <div id="hof-scroll"><div id="hof-list"></div></div>
+        <div class="card-title" style="margin-bottom:8px;justify-content:center"><span>🏆 대회별 1등</span></div>
+        <div id="contest-winners" class="logbox" style="height:166px;overflow:auto"></div>
       </div>
     </div>
 
@@ -155,9 +155,9 @@
       <div class="empty hidden" id="lb-empty">아직 순위에 오른 사람이 없어요. 이 난이도를 <b id="qc2">3</b>번 이상 도전해보세요!</div>
     </div>
 
-    <div class="home-bottom">
+    <div class="home-bottom" style="align-items:start;">
       <div class="card"><div class="card-title">📊 내 능력치</div><canvas id="radar" height="240"></canvas></div>
-      <div class="card" style="display:flex;flex-direction:column;"><div class="card-title"><span>🧾 내 최근 게임 로그</span><button class="ghost" id="mylog-refresh" style="padding:5px 11px;font-size:12px">새로고침</button></div><div id="mylog" class="logbox" style="flex:1;min-height:0;overflow:auto"></div></div>
+      <div class="card"><div class="card-title"><span>🧾 내 최근 게임 로그</span><button class="ghost" id="mylog-refresh" style="padding:5px 11px;font-size:12px">새로고침</button></div><div id="mylog" class="logbox" style="max-height:300px;overflow:auto"></div></div>
     </div>
   </section>
 
@@ -438,7 +438,7 @@ window.GO=function(v){
   if(v!=='game')inContest=false;
   const heroEl=document.querySelector('.hero');if(heroEl)heroEl.style.display=(v==='home'?'none':'');
   VIEWS.forEach(x=>$('view-'+x).classList.toggle('hidden',x!==v));
-  if(v==='home'){startScroll();startHof();renderRadar();renderMyLog();renderHallOfFame();}else{stopScroll();stopHof();}
+  if(v==='home'){startScroll();startHof();renderRadar();renderMyLog();renderHallOfFame();renderContestWinners();}else{stopScroll();stopHof();}
   if(v==='game'){applyModeUI();startTurn();updateQbar();}
   if(v==='records')renderMyRecords();
   if(v==='admin')renderAdmin();
@@ -467,6 +467,7 @@ function renderNav(){const nav=$('nav'),who=$('who');nav.innerHTML='';who.innerH
     add('🎮 게임',()=>OPENSETUP());
     add('📊 내 기록',()=>GO('records'));
     add('🔎 검색',()=>doSearch());
+    {const ob=document.createElement('button');ob.className='nav-btn';ob.id='online-btn';ob.textContent='🟢 접속 '+ONLINE.length+'명';ob.onclick=()=>openOnline();nav.appendChild(ob);}
     add('로그아웃',()=>signOut(auth),'ghost');
     const info=document.createElement('span');info.innerHTML='<b>'+esc(ME.displayName)+'</b>'+(ME.isAdmin?' · 총관리자':'');
     who.appendChild(info);
@@ -517,9 +518,9 @@ $('lb-scroll').addEventListener('mouseleave',()=>{if(!$('view-home').classList.c
 // ===== 접속 현황 =====
 let ONLINE=[];
 function heartbeat(){if(!ME)return;setDoc(doc(db,'presence',ME.email),{name:ME.displayName,role:ME.role,lastSeen:serverTimestamp()},{merge:true}).catch(()=>{});}
-function watchPresence(){onSnapshot(collection(db,'presence'),snap=>{const now=Date.now();ONLINE=[];snap.forEach(d=>{const x=d.data();const ms=x.lastSeen&&x.lastSeen.toMillis?x.lastSeen.toMillis():0;if(now-ms<=70000)ONLINE.push({name:x.name||d.id,role:x.role});});$('online-count').textContent=ONLINE.length;if($('online-overlay').classList.contains('show'))openOnline();});}
+function watchPresence(){onSnapshot(collection(db,'presence'),snap=>{const now=Date.now();ONLINE=[];snap.forEach(d=>{const x=d.data();const ms=x.lastSeen&&x.lastSeen.toMillis?x.lastSeen.toMillis():0;if(now-ms<=70000)ONLINE.push({name:x.name||d.id,role:x.role});});const oc=$('online-count');if(oc)oc.textContent=ONLINE.length;const ob=$('online-btn');if(ob)ob.textContent='🟢 접속 '+ONLINE.length+'명';if($('online-overlay').classList.contains('show'))openOnline();});}
 function openOnline(){$('ol-count').textContent=ONLINE.length;$('ol-list').innerHTML=ONLINE.length?ONLINE.map(o=>'<div class="row"><span><b>'+esc(o.name)+'</b></span><span class="d">'+(o.role==='teacher'?'교사':'학생')+'</span></div>').join(''):'<div style="color:var(--muted);text-align:center;padding:14px">접속자가 없어요</div>';$('online-overlay').classList.add('show');}
-$('online-open').addEventListener('click',openOnline);
+{const oo=$('online-open');if(oo)oo.addEventListener('click',openOnline);}
 $('ol-close').addEventListener('click',()=>$('online-overlay').classList.remove('show'));
 
 // ===== 능력치(육각형) / 로그 / 명예의전당 =====
@@ -666,6 +667,19 @@ function joinContest(){
 async function fetchContestRanking(id){try{const s=await getDocs(query(collection(db,'records'),where('contestId','==',id)));const best={};s.forEach(d=>{const r=d.data();const k=r.email||r.name;if(!best[k]||(r.score||0)>best[k].score)best[k]={name:r.name||r.email,score:r.score||0,cpm:r.cpm||0,acc:r.acc||0};});return Object.values(best).sort((a,b)=>b.score-a.score);}catch(e){return [];}}
 {const cb=$('contest-btn');if(cb)cb.addEventListener('click',()=>{if(!ME){GO('login');return;}openContest();});}
 $('ct-close').addEventListener('click',()=>$('contest-overlay').classList.remove('show'));
+
+// 홈: 대회별 우승자 (역대 대회 1위 모음)
+async function renderContestWinners(){
+  const el=$('contest-winners');if(!el)return;
+  el.innerHTML='<div style="color:var(--muted);padding:12px;text-align:center">불러오는 중...</div>';
+  try{
+    const s=await getDocs(query(collection(db,'records'),where('contest','==',true)));
+    const byC={};s.forEach(d=>{const r=d.data();const id=r.contestId||'?';if(!byC[id]||(r.score||0)>byC[id].score)byC[id]={id,title:r.contestTitle||'대회',name:r.name||r.email,score:r.score||0,cpm:r.cpm||0,acc:r.acc||0,diff:r.difficulty};});
+    const list=Object.values(byC).sort((a,b)=>a.id<b.id?1:-1);   // 최신 대회 먼저
+    el.innerHTML=list.length?list.map(c=>'<div class="row" style="align-items:center"><span><span class="pill'+(c.diff?' d-'+c.diff:'')+'">'+esc(c.title)+'</span><br><span style="font-size:15px">🥇 <b>'+esc(c.name)+'</b></span></span><span style="text-align:right"><b class="accent" style="font-size:16px">'+c.score+'</b>점<br><span class="d" style="font-size:12px">'+c.cpm+'타·'+c.acc+'%</span></span></div>').join(''):'<div style="color:var(--muted);padding:18px;text-align:center">아직 진행된 대회가 없어요.<br>🏆 대회 모드에서 대회를 열어보세요!</div>';
+  }catch(e){el.innerHTML='<div style="color:var(--bad);padding:12px;text-align:center">불러오기 실패</div>';}
+}
+{const cw=$('cw-refresh');if(cw)cw.addEventListener('click',renderContestWinners);}
 
 // ===== 인증 =====
 const provider = new GoogleAuthProvider();
