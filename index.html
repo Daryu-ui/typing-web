@@ -6,6 +6,7 @@
 <title>천하제일영타대회</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 <style>
   .home-top{display:grid;grid-template-columns:1fr 1.5fr;gap:16px;margin-bottom:18px;}
   .home-bottom{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
@@ -13,7 +14,11 @@
   #hof-scroll{height:66px;overflow:hidden;} #hof-list .hof{display:flex;justify-content:space-between;padding:7px 6px;border-bottom:1px dashed var(--line);font-size:14px;}
   #hof-list .hof b{color:var(--accent);} #hof-list .hof .d{color:var(--accent-2);font-weight:700;}
   .logbox{font-size:13px;} .logbox .row{display:flex;justify-content:space-between;gap:8px;padding:6px 4px;border-bottom:1px solid var(--line);}
-  .logbox .row .d{color:var(--muted);} .pill{font-size:11px;padding:1px 7px;border-radius:999px;background:rgba(56,189,248,.15);color:var(--accent-2);}
+  .logbox .row .d{color:var(--muted);} .pill{font-size:11px;padding:1px 7px;border-radius:999px;background:rgba(56,189,248,.15);color:var(--accent-2);font-weight:700;}
+  .pill.d-easy{background:rgba(34,197,94,.18);color:#4ade80;} .pill.d-normal{background:rgba(56,189,248,.18);color:#38bdf8;}
+  .pill.d-hard{background:rgba(167,139,250,.22);color:#c4b5fd;} .pill.d-extreme{background:rgba(251,191,36,.22);color:#fbbf24;}
+  .subtab.d-easy{color:#4ade80;} .subtab.d-normal{color:#38bdf8;} .subtab.d-hard{color:#c4b5fd;} .subtab.d-extreme{color:#fbbf24;}
+  .subtab.active{color:#1a1300!important;}
 </style>
 <style>
   :root{--bg:#0b1020;--panel:rgba(30,41,59,.72);--line:rgba(148,163,184,.18);--accent:#fbbf24;--accent-2:#38bdf8;--ok:#22c55e;--bad:#ef4444;--text:#eef2ff;--muted:#9aa6c0;}
@@ -27,7 +32,7 @@
   .subtitle{color:var(--accent-2);font-size:13px;letter-spacing:5px;font-weight:600;margin-top:4px;}
   .welcome{color:var(--muted);font-size:14px;margin-top:8px;}
   .topbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:16px 0;flex-wrap:wrap;}
-  .nav{display:flex;gap:8px;flex-wrap:wrap;} .who{color:var(--muted);font-size:14px;} .who b{color:var(--accent);}
+  .nav{display:flex;gap:8px;flex-wrap:wrap;} .who{color:var(--muted);font-size:14px;display:flex;align-items:center;gap:8px;} .who b{color:var(--accent);}
   button,select{font-family:inherit;font-size:14.5px;padding:10px 17px;border-radius:12px;border:1px solid var(--line);background:rgba(39,53,73,.7);color:var(--text);cursor:pointer;transition:transform .06s,background .15s;}
   button:hover{background:#334155;} button:active{transform:translateY(1px);}
   button.primary{background:linear-gradient(92deg,var(--accent),#f59e0b);color:#1a1300;border:none;font-weight:800;}
@@ -41,7 +46,7 @@
   .subtabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
   table{width:100%;border-collapse:collapse;} th,td{padding:10px 9px;text-align:center;border-bottom:1px solid var(--line);font-size:14.5px;} th{color:var(--muted);font-size:12.5px;}
   td.name{text-align:left;font-weight:700;} tr.me{background:rgba(251,191,36,.12);} .medal{font-size:18px;} .empty{color:var(--muted);text-align:center;padding:26px;}
-  #lb-scroll{max-height:520px;overflow:hidden;position:relative;} #lb-scroll.manual{overflow:auto;}
+  #lb-scroll{height:248px;overflow:hidden;position:relative;} #lb-scroll.manual{overflow:auto;}
   .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:0 0 16px;}
   .stat{background:linear-gradient(180deg,rgba(56,189,248,.10),rgba(30,41,59,.35));border:1px solid var(--line);border-radius:16px;padding:15px 12px;text-align:center;}
   .stat .label{color:var(--muted);font-size:12.5px;} .stat .value{font-size:28px;font-weight:800;margin-top:4px;} .stat .unit{font-size:12.5px;color:var(--muted);}
@@ -61,6 +66,18 @@
   .result .lines{text-align:left;font-size:16px;line-height:1.95;margin:8px 0 14px;} .result .lines b{color:var(--accent-2);float:right;}
   .big-login{text-align:center;padding:40px 20px;}
   .gbtn{display:inline-flex;align-items:center;gap:10px;background:#fff;color:#1f2937;font-weight:700;border:none;padding:13px 22px;border-radius:12px;font-size:16px;}
+  /* 홈 3분할 헤더 */
+  .home-header{display:grid;grid-template-columns:1fr 2.1fr 1fr;gap:16px;align-items:stretch;margin-bottom:18px;}
+  .hh-side{padding:14px 16px;display:flex;flex-direction:column;justify-content:center;}
+  .hh-center{text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:6px;}
+  .title-home{font-size:clamp(44px,8vw,102px);line-height:1.02;margin:6px 0 0;}
+  .logo-home{width:84px;height:84px;}
+  .hh-buttons{display:flex;gap:14px;justify-content:center;margin-top:16px;flex-wrap:wrap;}
+  .big-btn{font-size:21px;padding:15px 32px;border-radius:16px;font-weight:800;}
+  .contest-btn{background:linear-gradient(92deg,#7c3aed,#a855f7);color:#fff;border:none;}
+  .contest-btn.live{animation:ctpulse 1.3s infinite;}
+  @keyframes ctpulse{0%,100%{box-shadow:0 0 0 0 rgba(168,85,247,.55);}50%{box-shadow:0 0 0 11px rgba(168,85,247,0);}}
+  @media(max-width:880px){.home-header{grid-template-columns:1fr;}.logo-home{width:60px;height:60px;}}
 </style>
 </head>
 <body>
@@ -91,13 +108,29 @@
 
   <!-- 홈 -->
   <section id="view-home" class="hidden">
-    <div class="home-top">
-      <div class="card" style="padding:16px 18px;display:flex;flex-direction:column;justify-content:center;">
-        <div id="online-open" style="font-weight:800;color:var(--ok);cursor:pointer;font-size:17px;">🟢 현재 접속 <span id="online-count">0</span>명</div>
-        <div style="color:var(--muted);font-size:12px;margin-top:4px;">클릭하면 접속자 명단을 봐요</div>
+    <div class="home-header">
+      <div class="card hh-side">
+        <div id="online-open" style="font-weight:800;color:var(--ok);cursor:pointer;font-size:18px;text-align:center;">🟢 현재 접속<br><span id="online-count">0</span>명</div>
+        <div style="color:var(--muted);font-size:12px;margin-top:6px;text-align:center;">클릭하면 명단을 봐요</div>
       </div>
-      <div class="card" style="padding:14px 18px;">
-        <div class="card-title" style="margin-bottom:8px"><span>👑 난이도별 1위 — 명예의 전당</span></div>
+      <div class="hh-center">
+        <svg class="logo-home" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <path d="M30 24l5 8h30l5-8-7 5H37z" fill="#fbbf24"/>
+          <rect x="20" y="44" width="60" height="34" rx="8" fill="#1e293b" stroke="#38bdf8" stroke-width="2.5"/>
+          <rect x="27" y="51" width="8" height="7" rx="2" fill="#fbbf24"/><rect x="38" y="51" width="8" height="7" rx="2" fill="#94a3b8"/>
+          <rect x="49" y="51" width="8" height="7" rx="2" fill="#94a3b8"/><rect x="60" y="51" width="8" height="7" rx="2" fill="#38bdf8"/>
+          <rect x="27" y="62" width="30" height="7" rx="2" fill="#94a3b8"/><rect x="60" y="62" width="13" height="7" rx="2" fill="#fbbf24"/>
+        </svg>
+        <h1 class="title title-home" id="title-home">천하제일영타대회</h1>
+        <div class="subtitle">ENGLISH TYPING CHAMPIONSHIP</div>
+        <div id="welcome-name" class="welcome"></div>
+        <div class="hh-buttons">
+          <button class="primary big-btn" onclick="OPENSETUP()">🎮 시작!</button>
+          <button id="contest-btn" class="big-btn contest-btn">🏆 대회 모드</button>
+        </div>
+      </div>
+      <div class="card hh-side">
+        <div class="card-title" style="margin-bottom:8px;justify-content:center"><span>👑 난이도별 1위</span></div>
         <div id="hof-scroll"><div id="hof-list"></div></div>
       </div>
     </div>
@@ -108,10 +141,10 @@
         <span><button class="ghost" id="lb-refresh" style="padding:6px 12px;font-size:13px">🔄 새로고침</button> <span id="lb-info" style="color:var(--muted)"></span></span>
       </div>
       <div class="subtabs" id="lb-tabs">
-        <button class="subtab" data-diff="easy">쉬움</button>
-        <button class="subtab" data-diff="normal">보통</button>
-        <button class="subtab" data-diff="hard">상급</button>
-        <button class="subtab active" data-diff="extreme">극상</button>
+        <button class="subtab d-easy" data-diff="easy">쉬움</button>
+        <button class="subtab d-normal" data-diff="normal">보통</button>
+        <button class="subtab d-hard" data-diff="hard">상급</button>
+        <button class="subtab d-extreme active" data-diff="extreme">극상</button>
       </div>
       <div id="lb-scroll">
         <table><thead><tr><th>순위</th><th>이름</th><th>점수</th><th>타수</th><th>정확도</th><th>도전</th><th>후기</th></tr></thead><tbody id="lb-body"></tbody></table>
@@ -120,17 +153,8 @@
     </div>
 
     <div class="home-bottom">
-      <div class="card"><div class="card-title">📊 내 능력치 (FIFA 스타일)</div><canvas id="radar" height="240"></canvas></div>
+      <div class="card"><div class="card-title">📊 내 능력치</div><canvas id="radar" height="240"></canvas></div>
       <div class="card"><div class="card-title"><span>🧾 내 최근 게임 로그</span><button class="ghost" id="mylog-refresh" style="padding:5px 11px;font-size:12px">새로고침</button></div><div id="mylog" class="logbox" style="max-height:260px;overflow:auto"></div></div>
-    </div>
-
-    <div class="card" style="max-width:600px;">
-      <h2 id="welcome-name"></h2>
-      <div class="controls" style="justify-content:flex-start">
-        <button class="primary" onclick="OPENSETUP()">🎮 게임 시작</button>
-        <button onclick="GO('records')">📊 내 기록</button>
-        <button class="ghost" id="home-search">🔎 사람 검색</button>
-      </div>
     </div>
   </section>
 
@@ -177,6 +201,15 @@
   <!-- 관리자: 전체 기록 -->
   <section id="view-admin" class="hidden">
     <div class="card">
+      <div class="card-title"><span>📄 PDF로 지문 추가 <span style="color:var(--accent-2);font-size:12px">(문장 추출 · 길이 기준 자동 난이도 분류)</span></span><span id="pdf-extra-count" style="color:var(--muted);font-size:12px"></span></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+        <input type="file" id="pdf-file" accept="application/pdf" style="font-size:13px;color:var(--text);">
+        <button id="pdf-extract" class="ghost">📑 텍스트 추출</button>
+        <span id="pdf-status" style="color:var(--muted);font-size:13px"></span>
+      </div>
+      <div id="pdf-preview" class="hidden" style="margin-top:14px"></div>
+    </div>
+    <div class="card">
       <div class="card-title">
         <span>🛠️ 관리자 — 전체 참가자 기록</span>
         <span>
@@ -215,10 +248,10 @@
     <h2>🎮 게임 설정</h2>
     <div style="text-align:left;margin:14px 0 6px;color:var(--muted);font-size:13px">난이도를 고르세요</div>
     <div class="subtabs" id="setup-diff">
-      <button class="subtab" data-d="easy">쉬움</button>
-      <button class="subtab" data-d="normal">보통</button>
-      <button class="subtab" data-d="hard">상급</button>
-      <button class="subtab" data-d="extreme">극상</button>
+      <button class="subtab d-easy" data-d="easy">쉬움</button>
+      <button class="subtab d-normal" data-d="normal">보통</button>
+      <button class="subtab d-hard" data-d="hard">상급</button>
+      <button class="subtab d-extreme" data-d="extreme">극상</button>
     </div>
     <div id="setup-mode-wrap" class="hidden">
       <div style="text-align:left;margin:14px 0 6px;color:var(--muted);font-size:13px">극상 모드</div>
@@ -252,6 +285,15 @@
     <div class="card-title" style="margin-top:8px">최근 기록</div>
     <div id="pp-log" class="logbox" style="max-height:200px;overflow:auto"></div>
     <div class="controls" style="margin-top:14px"><button class="ghost" id="pp-close">닫기</button></div>
+  </div>
+</div>
+
+<!-- 대회 모드 팝업 -->
+<div class="overlay" id="contest-overlay">
+  <div class="result" style="max-width:560px;text-align:left">
+    <h2 style="text-align:center" id="ct-head">🏆 대회 모드</h2>
+    <div id="ct-body"></div>
+    <div class="controls" style="margin-top:14px;justify-content:center"><button class="ghost" id="ct-close">닫기</button></div>
   </div>
 </div>
 
@@ -301,6 +343,7 @@ const vCpm=document.querySelector('#v-cpm .value'),vAcc=document.querySelector('
 const DLABEL={easy:'쉬움',normal:'보통',hard:'상급',extreme:'극상'}, DIFFS=['easy','normal','hard','extreme'];
 let target="",startTime=null,timerId=null,finished=false,lastDiff='extreme';
 let RUN_N=3, exMode='practice', run=null;
+let inContest=false, CONTEST=null, CONTEST_INFO=null;   // 대회 모드
 
 function pickSentence(){const S=sentences();const p=S[diffEl.value]||S.normal;return p[Math.floor(Math.random()*p.length)];}
 function pickN(n){let pool=(sentences().extreme||[]).slice();const out=[];for(let i=0;i<n;i++){if(!pool.length)pool=(sentences().extreme||[]).slice();out.push(pool.length?pool.splice(Math.floor(Math.random()*pool.length),1)[0]:'');}return out;}
@@ -321,6 +364,18 @@ function finish(){
   const typed=typedEl.value,s=computeStats(typed),sec=startTime?(Date.now()-startTime)/1000:0,diff=diffEl.value;lastDiff=diff;
   const rc=$('resultControls'),extra=$('r-extra');rc.innerHTML='';extra.innerHTML='';$('r-review-box').classList.add('hidden');
   const addBtn=(l,f)=>{const b=document.createElement('button');b.className='primary';b.textContent=l;b.onclick=f;rc.appendChild(b);};
+
+  if(inContest&&CONTEST){
+    showStats(s.cpm,s.acc,sec,s.err);
+    const score=Math.round(s.cpm*s.acc/100);
+    $('r-title').textContent='🏆 '+(CONTEST.title||'대회')+' 결과';
+    extra.innerHTML='대회 점수 <b>'+score+'</b> — 대회 순위에 제출됨';
+    if(ME)addDoc(collection(db,'records'),{email:ME.email,name:ME.displayName,role:ME.role,difficulty:CONTEST.difficulty,score,cpm:s.cpm,acc:s.acc,time:sec,contest:true,contestId:CONTEST.id,contestTitle:CONTEST.title,ts:serverTimestamp()}).catch(()=>{});
+    addBtn('🔁 다시 도전',startTurn);
+    addBtn('🏆 대회 순위 보기',()=>{overlay.classList.remove('show');GO('home');openContest();});
+    addBtn('🏠 홈으로',()=>{overlay.classList.remove('show');GO('home');});
+    overlay.classList.add('show');return;
+  }
 
   if(diff==='extreme'&&exMode==='record'&&run){
     run.results.push({cpm:s.cpm,acc:s.acc,time:sec});
@@ -351,11 +406,15 @@ function submitRecord(diff,cpm,acc,time,extra){
   if(e.n>=QUALIFY){$('r-review').value=e.review||'';$('r-review-msg').textContent='';$('r-review-box').classList.remove('hidden');}
 }
 function updateQbar(){const qb=$('qbar'),d=diffEl.value;
+  if(inContest&&CONTEST){qb.innerHTML='🏆 <b>'+esc(CONTEST.title)+'</b> 대회 진행 중 — 난이도 '+(DLABEL[CONTEST.difficulty]||'')+'. 완료하면 대회 순위에 자동 제출됩니다.';return;}
   if(d==='extreme'&&exMode==='practice'){qb.innerHTML='🎯 <b>연습모드</b> — 순위 미반영. 기록모드로 바꾸면 순위 등록.';return;}
   const c=(myData.best&&myData.best[d]&&myData.best[d].n)||0;const lbl=d==='extreme'?'극상(기록)':DLABEL[d];
   qb.innerHTML=c>=QUALIFY?('✅ '+lbl+' 순위 등재됨 — 지금까지 <b>'+c+'</b>회'):(lbl+' <b>'+c+' / '+QUALIFY+'</b>회 — 등재까지 <b>'+(QUALIFY-c)+'</b>회');}
 function setExmodeActive(){document.querySelectorAll('#exmode-row .subtab').forEach(b=>b.classList.toggle('active',b.dataset.m===exMode));}
-function applyModeUI(){const ext=diffEl.value==='extreme';$('exmode-row').classList.toggle('hidden',!ext);setExmodeActive();const rec=ext&&exMode==='record';$('newBtn').style.display=rec?'none':'';$('resetBtn').textContent=rec?'↺ 기록 다시':'↺ 다시 시작';}
+function applyModeUI(){
+  if(inContest){$('exmode-row').classList.add('hidden');diffEl.style.display='none';$('newBtn').style.display='';$('resetBtn').textContent='↺ 다시';return;}
+  diffEl.style.display='';
+  const ext=diffEl.value==='extreme';$('exmode-row').classList.toggle('hidden',!ext);setExmodeActive();const rec=ext&&exMode==='record';$('newBtn').style.display=rec?'none':'';$('resetBtn').textContent=rec?'↺ 기록 다시':'↺ 다시 시작';}
 
 typedEl.addEventListener('input',()=>{if(finished)return;const t=typedEl.value;if(startTime===null&&t.length>0){startTime=Date.now();timerId=setInterval(()=>{updateTime();updateStatsDisplay(typedEl.value);},100);}renderTarget(t);updateStatsDisplay(t);if(t.length>=target.length)finish();});
 typedEl.addEventListener('paste',e=>e.preventDefault());
@@ -373,6 +432,8 @@ const VIEWS=['login','home','game','records','admin'];
 window.GO=function(v){
   if((v==='game'||v==='records')&&!ME){v='home';}
   if(v==='admin'&&(!ME||!ME.isAdmin)){v='home';}
+  if(v!=='game')inContest=false;
+  const heroEl=document.querySelector('.hero');if(heroEl)heroEl.style.display=(v==='home'?'none':'');
   VIEWS.forEach(x=>$('view-'+x).classList.toggle('hidden',x!==v));
   if(v==='home'){startScroll();startHof();renderRadar();renderMyLog();renderHallOfFame();}else{stopScroll();stopHof();}
   if(v==='game'){applyModeUI();startTurn();updateQbar();}
@@ -381,6 +442,7 @@ window.GO=function(v){
   window.scrollTo(0,0);
 };
 $('title').addEventListener('click',()=>GO(ME?'home':'login'));
+{const th=$('title-home');if(th){th.style.cursor='pointer';th.addEventListener('click',()=>GO('home'));}}
 
 // ===== 게임 설정 팝업 (난이도/모드 선택) =====
 let selDiff='normal', selMode='practice';
@@ -393,13 +455,21 @@ window.OPENSETUP=function(){ if(!ME){GO('home');return;} selDiff=diffEl.value||'
 document.querySelectorAll('#setup-diff .subtab').forEach(b=>b.addEventListener('click',()=>{selDiff=b.dataset.d;if(selDiff!=='extreme')selMode='practice';renderSetup();}));
 document.querySelectorAll('#setup-mode .subtab').forEach(b=>b.addEventListener('click',()=>{selMode=b.dataset.m;renderSetup();}));
 $('setup-cancel').addEventListener('click',()=>$('setup-overlay').classList.remove('show'));
-function startFromSetup(){ $('setup-overlay').classList.remove('show'); diffEl.value=selDiff; exMode=selMode; GO('game'); }
+function startFromSetup(){ inContest=false; CONTEST=null; $('setup-overlay').classList.remove('show'); diffEl.value=selDiff; exMode=selMode; GO('game'); }
 $('setup-start').addEventListener('click',startFromSetup);
-function renderNav(){const nav=$('nav'),who=$('who');nav.innerHTML='';
+function renderNav(){const nav=$('nav'),who=$('who');nav.innerHTML='';who.innerHTML='';
   const add=(l,f,c)=>{const b=document.createElement('button');b.textContent=l;b.className='nav-btn '+(c||'');b.onclick=f;nav.appendChild(b);};
   add('🏆 순위표',()=>GO('home'));
-  if(ME){add('🎮 게임',()=>OPENSETUP());add('📊 내 기록',()=>GO('records'));add('🔎 검색',()=>doSearch());if(ME.isAdmin)add('🛠️ 관리자',()=>GO('admin'));add('로그아웃',()=>signOut(auth),'ghost');who.innerHTML='<b>'+esc(ME.displayName)+'</b>'+(ME.isAdmin?' · 총관리자':'');}
-  else who.textContent='로그인하지 않음';
+  if(ME){
+    add('🎮 게임',()=>OPENSETUP());
+    add('📊 내 기록',()=>GO('records'));
+    add('🔎 검색',()=>doSearch());
+    add('로그아웃',()=>signOut(auth),'ghost');
+    const info=document.createElement('span');info.innerHTML='<b>'+esc(ME.displayName)+'</b>'+(ME.isAdmin?' · 총관리자':'');
+    who.appendChild(info);
+    if(ME.isAdmin){const ab=document.createElement('button');ab.textContent='🛠️ 관리자';ab.className='nav-btn';ab.style.marginLeft='4px';ab.onclick=()=>GO('admin');who.appendChild(ab);}
+  } else who.textContent='로그인하지 않음';
+  updateContestBtn();
 }
 
 // ===== 내 기록 =====
@@ -462,7 +532,7 @@ function renderRadar(){if(ME)renderRadarOn('radar',myData.best);}
 function renderRecChart(){const el=$('rec-chart');if(!el||!window.Chart)return;const b=myData.best||{};if(RADARS['rec-chart'])RADARS['rec-chart'].destroy();RADARS['rec-chart']=new Chart(el.getContext('2d'),{type:'bar',data:{labels:['쉬움','보통','상급','극상'],datasets:[{label:'최고점수',data:DIFFS.map(d=>(b[d]&&b[d].score)||0),backgroundColor:['#22c55e','#38bdf8','#a78bfa','#fbbf24'],borderRadius:6}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});}
 function tsms(t){return t&&t.toMillis?t.toMillis():0;}
 function fmtTs(t){try{const d=t&&t.toDate?t.toDate():new Date(t);return (d.getMonth()+1)+'/'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}catch(e){return '';}}
-function logHtml(rows){if(!rows||!rows.length)return '<div style="color:var(--muted);padding:14px;text-align:center">아직 기록이 없어요.</div>';return rows.map(r=>'<div class="row"><span><span class="pill">'+(DLABEL[r.difficulty]||r.difficulty)+'</span> <b class="accent">'+r.score+'</b>점</span><span>'+r.cpm+'타·'+r.acc+'%</span><span class="d">'+fmtTs(r.ts)+'</span></div>').join('');}
+function logHtml(rows){if(!rows||!rows.length)return '<div style="color:var(--muted);padding:14px;text-align:center">아직 기록이 없어요.</div>';return rows.map(r=>'<div class="row"><span><span class="pill d-'+r.difficulty+'">'+(DLABEL[r.difficulty]||r.difficulty)+'</span> <b class="accent">'+r.score+'</b>점</span><span>'+r.cpm+'타·'+r.acc+'%</span><span class="d">'+fmtTs(r.ts)+'</span></div>').join('');}
 async function fetchLogs(email,n){try{const s=await getDocs(query(collection(db,'records'),where('email','==',email)));const out=[];s.forEach(d=>out.push(d.data()));out.sort((a,b)=>tsms(b.ts)-tsms(a.ts));return out.slice(0,n||30);}catch(e){return [];}}
 function renderMyLog(){if($('mylog'))fetchLogs(ME.email,30).then(r=>$('mylog').innerHTML=logHtml(r));}
 $('mylog-refresh').addEventListener('click',renderMyLog);
@@ -475,7 +545,7 @@ function stopHof(){if(hofTimer){clearInterval(hofTimer);hofTimer=null;}}
 function rankIn(email,diff){const rows=[];usersCache.forEach(u=>{const e=u.best&&u.best[diff];if(e&&(e.n||0)>=QUALIFY)rows.push({email:u.email,score:e.score||0});});rows.sort((a,b)=>b.score-a.score);const i=rows.findIndex(r=>r.email===email);return i>=0?((i+1)+'위/'+rows.length):'미등재';}
 function openPerson(u){$('pp-name').textContent=u.name||u.email;renderRadarOn('pp-radar',u.best);let html='<table><thead><tr><th>난이도</th><th>점수</th><th>타수</th><th>정확도</th><th>도전</th><th>순위</th></tr></thead><tbody>';DIFFS.forEach(d=>{const e=(u.best&&u.best[d])||{};html+='<tr><td>'+DLABEL[d]+'</td><td><b class="accent">'+(e.score||0)+'</b></td><td>'+(e.cpm||0)+'</td><td>'+(e.acc||0)+'%</td><td>'+(e.n||0)+'회</td><td>'+rankIn(u.email,d)+'</td></tr>';});html+='</tbody></table>';$('pp-best').innerHTML=html;$('pp-log').innerHTML='<div style="color:var(--muted);padding:10px">불러오는 중...</div>';fetchLogs(u.email,20).then(r=>$('pp-log').innerHTML=logHtml(r));$('person-overlay').classList.add('show');}
 function doSearch(){const kw=prompt('검색할 사람의 이름 또는 이메일');if(!kw)return;const k=kw.trim().toLowerCase();const f=usersCache.filter(u=>String(u.name||'').toLowerCase().includes(k)||String(u.email||'').toLowerCase().includes(k));if(!f.length){alert('찾는 사람이 없어요. (게임 기록이 있어야 검색돼요)');return;}openPerson(f[0]);}
-$('home-search').addEventListener('click',doSearch);
+{const hs=$('home-search');if(hs)hs.addEventListener('click',doSearch);}
 $('pp-close').addEventListener('click',()=>$('person-overlay').classList.remove('show'));
 
 // ===== 관리자: 전체 기록 + CSV =====
@@ -484,6 +554,115 @@ $('adm-search').addEventListener('input',renderAdmin);
 function csvEsc(s){s=String(s==null?'':s);return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
 function download(name,content){const blob=new Blob(['﻿'+content],{type:'text/csv;charset=utf-8;'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();}
 $('adm-csv-all').addEventListener('click',()=>{const rows=[['이름','구분','이메일','난이도','최고점수','최고타수','정확도','도전횟수','후기']];usersCache.forEach(u=>{const b=u.best||{};DIFFS.forEach(d=>{const e=b[d];if(e)rows.push([u.name||u.email,u.role==='teacher'?'교사':'학생',u.email,DLABEL[d],e.score||0,e.cpm||0,e.acc||0,e.n||0,e.review||'']);});});download('typing_records_all.csv',rows.map(r=>r.map(csvEsc).join(',')).join('\n'));});
+
+// ===== 관리자: PDF로 지문 추가 =====
+if(window.pdfjsLib){ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js'; }
+let pdfParsed=null;
+async function extractPdfText(file){
+  const buf=await file.arrayBuffer();
+  const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+  let text='';
+  for(let p=1;p<=pdf.numPages;p++){const page=await pdf.getPage(p);const tc=await page.getTextContent();text+=' '+tc.items.map(it=>it.str).join(' ');}
+  return text;
+}
+function cleanPdfText(t){return t.replace(/(\w)-\s+(\w)/g,'$1$2').replace(/\s+/g,' ').replace(/[“”]/g,'"').replace(/[‘’]/g,"'").trim();}
+function splitSentences(t){
+  const parts=t.match(/[^.!?]+[.!?]+(?=\s|$)/g)||[];const out=[];
+  for(let s of parts){s=s.trim();
+    if(s.length<12)continue;
+    const letters=(s.match(/[A-Za-z]/g)||[]).length;
+    if(letters<s.length*0.5)continue;           // 한글 등 비영어 비중이 크면 제외
+    if(s.split(/\s+/).length<2)continue;          // 단어 2개 미만 제외
+    out.push(s);}
+  return out;
+}
+function classifyDiff(s){const n=s.length;if(n<45)return 'easy';if(n<90)return 'normal';if(n<150)return 'hard';return 'extreme';}
+function groupByDiff(sents){const g={easy:[],normal:[],hard:[],extreme:[]};sents.forEach(s=>g[classifyDiff(s)].push(s));return g;}
+function updateExtraCount(){const el=$('pdf-extra-count');if(!el)return;if(!EXTRA){el.textContent='현재 추가 지문: 0개';return;}let n=0;DIFFS.forEach(d=>n+=(EXTRA[d]||[]).length);el.textContent='현재 추가 지문: '+n+'개';}
+function renderPdfPreview(){
+  const box=$('pdf-preview');box.classList.remove('hidden');
+  let h='<div style="color:var(--muted);font-size:13px;margin-bottom:8px">자동 분류 결과입니다. 한 줄에 한 문장이며, 직접 수정·삭제할 수 있어요. 저장하면 기존 추가 지문에 <b>합쳐집니다</b>.</div>';
+  DIFFS.forEach(d=>{h+='<div style="margin-bottom:10px"><div style="font-weight:700;margin-bottom:4px"><span class="pill d-'+d+'">'+DLABEL[d]+'</span> '+pdfParsed[d].length+'문장</div><textarea id="pdf-ta-'+d+'" style="width:100%;min-height:64px;font-size:13px;font-family:monospace;background:rgba(15,23,42,.6);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px">'+esc(pdfParsed[d].join("\n"))+'</textarea></div>';});
+  h+='<div class="controls" style="justify-content:flex-start;margin-top:6px"><button class="primary" id="pdf-save">💾 추가 지문으로 저장</button><button class="ghost" id="pdf-clear-extra">🗑️ 추가 지문 전체 삭제</button><span id="pdf-save-msg" style="color:var(--ok);font-size:13px"></span></div>';
+  box.innerHTML=h;
+  $('pdf-save').addEventListener('click',savePdfSentences);
+  $('pdf-clear-extra').addEventListener('click',clearExtraSentences);
+}
+async function savePdfSentences(){
+  const msg=$('pdf-save-msg');msg.style.color='var(--muted)';msg.textContent='저장 중...';
+  const cur=Object.assign({easy:[],normal:[],hard:[],extreme:[]},EXTRA||{});
+  DIFFS.forEach(d=>{const lines=(($('pdf-ta-'+d)&&$('pdf-ta-'+d).value)||'').split(/\n+/).map(s=>s.trim()).filter(s=>s.length>=8);cur[d]=Array.from(new Set([...(cur[d]||[]),...lines]));});
+  try{await setDoc(doc(db,'content','sentences'),cur);msg.style.color='var(--ok)';msg.textContent='✅ 저장됨! 이제 모두 이 지문으로 게임할 수 있어요.';}
+  catch(e){msg.style.color='var(--bad)';msg.textContent='저장 실패: '+e.message;}
+}
+async function clearExtraSentences(){
+  if(!confirm('추가했던 PDF 지문을 모두 삭제할까요?\n(기본 내장 지문은 그대로 유지됩니다)'))return;
+  const msg=$('pdf-save-msg');
+  try{await setDoc(doc(db,'content','sentences'),{easy:[],normal:[],hard:[],extreme:[]});msg.style.color='var(--ok)';msg.textContent='✅ 추가 지문을 모두 비웠습니다.';}
+  catch(e){msg.style.color='var(--bad)';msg.textContent='실패: '+e.message;}
+}
+const pdfExtractBtn=$('pdf-extract');
+if(pdfExtractBtn)pdfExtractBtn.addEventListener('click',async()=>{
+  const f=$('pdf-file').files[0];const st=$('pdf-status');
+  if(!f){st.style.color='var(--bad)';st.textContent='PDF 파일을 먼저 선택하세요.';return;}
+  if(!window.pdfjsLib){st.style.color='var(--bad)';st.textContent='PDF 라이브러리 로드 실패 — 인터넷 연결을 확인하세요.';return;}
+  st.style.color='var(--muted)';st.textContent='추출 중...';$('pdf-preview').classList.add('hidden');
+  try{
+    const sents=splitSentences(cleanPdfText(await extractPdfText(f)));
+    if(!sents.length){st.style.color='var(--bad)';st.textContent='추출된 영어 문장이 없습니다. (스캔 이미지 PDF는 글자가 안 잡힐 수 있어요)';pdfParsed=null;return;}
+    pdfParsed=groupByDiff(sents);renderPdfPreview();
+    st.style.color='var(--ok)';st.textContent='총 '+sents.length+'문장 추출됨. 아래에서 확인·수정 후 저장하세요.';
+  }catch(e){st.style.color='var(--bad)';st.textContent='오류: '+e.message;}
+});
+
+// ===== 대회 모드 =====
+function updateContestBtn(){const b=$('contest-btn');if(!b)return;
+  if(CONTEST_INFO&&CONTEST_INFO.active){b.classList.add('live');b.textContent='🏆 대회 진행중 — 입장!';}
+  else{b.classList.remove('live');b.textContent=(ME&&ME.isAdmin)?'🏆 대회 개설':'🏆 대회 모드';}}
+function openContest(){renderContest();$('contest-overlay').classList.add('show');}
+function renderContest(){
+  const body=$('ct-body');const info=(CONTEST_INFO&&CONTEST_INFO.active)?CONTEST_INFO:null;let h='';
+  if(info){
+    h+='<div style="text-align:center;margin-bottom:10px"><div style="font-size:18px;font-weight:800;color:var(--accent)">'+esc(info.title)+'</div><div style="color:var(--muted);font-size:13px;margin-top:4px">난이도 <span class="pill d-'+info.difficulty+'">'+(DLABEL[info.difficulty]||info.difficulty)+'</span></div></div>';
+    h+='<div style="margin:10px 0"><label style="font-size:13px;color:var(--muted)">입장 비밀번호</label><div style="display:flex;gap:8px;margin-top:5px"><input id="ct-pw" type="password" placeholder="비밀번호" style="flex:1;font-size:15px;padding:10px;border-radius:9px;border:1px solid var(--line);background:rgba(15,23,42,.6);color:var(--text)"><button class="primary" id="ct-join">입장 ▶</button></div><div id="ct-msg" style="font-size:13px;color:var(--bad);margin-top:5px"></div></div>';
+    h+='<div class="card-title" style="margin-top:8px"><span>🏆 대회 순위</span><button class="ghost" id="ct-rank-refresh" style="padding:4px 10px;font-size:12px">새로고침</button></div><div id="ct-rank" class="logbox" style="max-height:200px;overflow:auto"><div style="color:var(--muted);padding:10px">불러오는 중...</div></div>';
+    if(ME&&ME.isAdmin)h+='<div class="controls" style="margin-top:12px;justify-content:center"><button id="ct-close-room" style="border-color:var(--bad);color:var(--bad)">⛔ 이 대회 종료</button></div>';
+  } else if(ME&&ME.isAdmin){
+    h+='<div style="color:var(--muted);font-size:13px;margin-bottom:10px">대회를 개설하면 학생들이 비밀번호로 입장할 수 있어요. <b>(관리자 전용)</b></div>';
+    h+='<label style="font-size:13px;color:var(--muted)">대회 이름</label><input id="ct-f-title" placeholder="예: 1학년 3반 영타 대회" style="width:100%;font-size:15px;padding:10px;border-radius:9px;border:1px solid var(--line);background:rgba(15,23,42,.6);color:var(--text);margin:5px 0 10px">';
+    h+='<label style="font-size:13px;color:var(--muted)">입장 비밀번호</label><input id="ct-f-pw" placeholder="비밀번호" style="width:100%;font-size:15px;padding:10px;border-radius:9px;border:1px solid var(--line);background:rgba(15,23,42,.6);color:var(--text);margin:5px 0 10px">';
+    h+='<label style="font-size:13px;color:var(--muted)">난이도</label><select id="ct-f-diff" style="width:100%;margin:5px 0 12px"><option value="easy">쉬움</option><option value="normal" selected>보통</option><option value="hard">상급</option><option value="extreme">극상</option></select>';
+    h+='<div class="controls" style="justify-content:center"><button class="primary" id="ct-create">🏁 대회 개설</button></div>';
+  } else {
+    h+='<div style="text-align:center;color:var(--muted);padding:18px">현재 열린 대회가 없습니다.<br>관리자가 대회를 열면 여기서 입장할 수 있어요.</div>';
+  }
+  body.innerHTML=h;
+  if(info){
+    const j=$('ct-join');if(j)j.onclick=joinContest;
+    const cr=$('ct-close-room');if(cr)cr.onclick=closeContest;
+    const rf=$('ct-rank-refresh');if(rf)rf.onclick=()=>loadContestRank(info.id);
+    const pw=$('ct-pw');if(pw)pw.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();joinContest();}});
+    loadContestRank(info.id);
+  } else { const c=$('ct-create');if(c)c.onclick=createContest; }
+}
+function loadContestRank(id){fetchContestRanking(id).then(rows=>{const el=$('ct-rank');if(!el)return;el.innerHTML=rows.length?rows.map((r,i)=>'<div class="row"><span>'+(i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1)+'.')+' <b>'+esc(r.name)+'</b></span><span><b class="accent">'+r.score+'</b>점 · '+r.cpm+'타·'+r.acc+'%</span></div>').join(''):'<div style="color:var(--muted);padding:10px;text-align:center">아직 참가자가 없어요.</div>';});}
+async function createContest(){
+  const title=($('ct-f-title').value||'').trim()||'천하제일 영타 대회';const pw=($('ct-f-pw').value||'').trim();
+  if(!pw){alert('입장 비밀번호를 설정하세요.');return;}
+  try{await setDoc(doc(db,'contests','current'),{active:true,title,password:pw,difficulty:$('ct-f-diff').value,id:'c'+Date.now(),createdAt:serverTimestamp()});}
+  catch(e){alert('개설 실패: '+e.message);}
+}
+async function closeContest(){if(!confirm('이 대회를 종료할까요? (기록은 보존됩니다)'))return;try{await updateDoc(doc(db,'contests','current'),{active:false});}catch(e){alert('실패: '+e.message);}}
+function joinContest(){
+  const info=CONTEST_INFO,msg=$('ct-msg');
+  if(!info||!info.active){if(msg)msg.textContent='열린 대회가 없습니다.';return;}
+  if(($('ct-pw').value||'').trim()!==info.password){if(msg)msg.textContent='비밀번호가 틀렸습니다.';return;}
+  CONTEST={id:info.id,title:info.title,difficulty:info.difficulty};inContest=true;diffEl.value=info.difficulty;exMode='practice';
+  $('contest-overlay').classList.remove('show');GO('game');
+}
+async function fetchContestRanking(id){try{const s=await getDocs(query(collection(db,'records'),where('contestId','==',id)));const best={};s.forEach(d=>{const r=d.data();const k=r.email||r.name;if(!best[k]||(r.score||0)>best[k].score)best[k]={name:r.name||r.email,score:r.score||0,cpm:r.cpm||0,acc:r.acc||0};});return Object.values(best).sort((a,b)=>b.score-a.score);}catch(e){return [];}}
+{const cb=$('contest-btn');if(cb)cb.addEventListener('click',()=>{if(!ME){GO('login');return;}openContest();});}
+$('ct-close').addEventListener('click',()=>$('contest-overlay').classList.remove('show'));
 
 // ===== 인증 =====
 const provider = new GoogleAuthProvider();
@@ -509,7 +688,9 @@ if(auth){
     // 전체 사용자 실시간(순위표)
     onSnapshot(collection(db,'users'),snap=>{usersCache=[];snap.forEach(d=>usersCache.push(d.data()));renderLeaderboard();renderHallOfFame();if(!$('view-admin').classList.contains('hidden'))renderAdmin();});
     // 공용 지문
-    onSnapshot(doc(db,'content','sentences'),d=>{EXTRA=d.exists()?d.data():null;});
+    onSnapshot(doc(db,'content','sentences'),d=>{EXTRA=d.exists()?d.data():null;updateExtraCount();});
+    // 대회 상태 실시간
+    onSnapshot(doc(db,'contests','current'),d=>{CONTEST_INFO=d.exists()?d.data():null;updateContestBtn();if($('contest-overlay').classList.contains('show'))renderContest();});
     watchPresence(); heartbeat(); setInterval(heartbeat,30000);
     $('welcome-name').textContent=ME.displayName+' 님, 환영합니다!';
     renderNav(); GO('home');
