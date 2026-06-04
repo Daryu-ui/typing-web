@@ -103,7 +103,7 @@
     </div>
     <div class="card" style="max-width:520px;">
       <h2 id="welcome-name"></h2>
-      <div class="controls" style="justify-content:flex-start"><button class="primary" onclick="GO('game')">🎮 게임 시작</button><button onclick="GO('records')">📊 내 기록</button></div>
+      <div class="controls" style="justify-content:flex-start"><button class="primary" onclick="OPENSETUP()">🎮 게임 시작</button><button onclick="GO('records')">📊 내 기록</button></div>
     </div>
   </section>
 
@@ -158,6 +158,29 @@
     </div>
     <div class="controls" id="resultControls"></div>
     <div style="color:var(--muted);font-size:13px;margin-top:12px">Enter 키로 계속</div>
+  </div>
+</div>
+
+<!-- 게임 설정(난이도/모드) 팝업 -->
+<div class="overlay" id="setup-overlay">
+  <div class="result" style="max-width:540px">
+    <h2>🎮 게임 설정</h2>
+    <div style="text-align:left;margin:14px 0 6px;color:var(--muted);font-size:13px">난이도를 고르세요</div>
+    <div class="subtabs" id="setup-diff">
+      <button class="subtab" data-d="easy">쉬움</button>
+      <button class="subtab" data-d="normal">보통</button>
+      <button class="subtab" data-d="hard">상급</button>
+      <button class="subtab" data-d="extreme">극상</button>
+    </div>
+    <div id="setup-mode-wrap" class="hidden">
+      <div style="text-align:left;margin:14px 0 6px;color:var(--muted);font-size:13px">극상 모드</div>
+      <div class="subtabs" id="setup-mode">
+        <button class="subtab" data-m="practice">🎯 연습</button>
+        <button class="subtab" data-m="record">🏅 기록 (3지문 평균·순위 반영)</button>
+      </div>
+    </div>
+    <div class="controls" style="margin-top:18px"><button class="primary" id="setup-start">시작하기 ▶</button><button class="ghost" id="setup-cancel">취소</button></div>
+    <div style="color:var(--muted);font-size:13px;margin-top:12px">Enter 키로 바로 시작</div>
   </div>
 </div>
 
@@ -269,7 +292,9 @@ $('resetBtn').addEventListener('click',startTurn);
 $('newBtn').addEventListener('click',startTurn);
 diffEl.addEventListener('change',()=>{if(diffEl.value!=='extreme')exMode='practice';applyModeUI();startTurn();updateQbar();});
 document.querySelectorAll('#exmode-row .subtab').forEach(b=>b.addEventListener('click',()=>{exMode=b.dataset.m;applyModeUI();startTurn();updateQbar();}));
-document.addEventListener('keydown',e=>{if(e.key==='Enter'&&overlay.classList.contains('show')){e.preventDefault();const b=document.querySelector('#resultControls button');if(b)b.click();}});
+document.addEventListener('keydown',e=>{if(e.key!=='Enter')return;
+  if($('setup-overlay').classList.contains('show')){e.preventDefault();startFromSetup();return;}
+  if(overlay.classList.contains('show')){e.preventDefault();const b=document.querySelector('#resultControls button');if(b)b.click();}});
 $('r-review-save').addEventListener('click',()=>{const m=$('r-review-msg');const e=myData.best[lastDiff];if(!e){m.textContent='기록이 없습니다';return;}e.review=$('r-review').value.slice(0,120);const upd={};upd['best.'+lastDiff]=e;updateDoc(doc(db,'users',ME.email),upd).then(()=>{m.style.color='var(--ok)';m.textContent='✅ 저장됨';}).catch(()=>{m.style.color='var(--bad)';m.textContent='실패';});});
 
 // ===== 화면 전환 =====
@@ -283,10 +308,24 @@ window.GO=function(v){
   window.scrollTo(0,0);
 };
 $('title').addEventListener('click',()=>GO(ME?'home':'login'));
+
+// ===== 게임 설정 팝업 (난이도/모드 선택) =====
+let selDiff='normal', selMode='practice';
+function renderSetup(){
+  document.querySelectorAll('#setup-diff .subtab').forEach(b=>b.classList.toggle('active',b.dataset.d===selDiff));
+  document.querySelectorAll('#setup-mode .subtab').forEach(b=>b.classList.toggle('active',b.dataset.m===selMode));
+  $('setup-mode-wrap').classList.toggle('hidden',selDiff!=='extreme');
+}
+window.OPENSETUP=function(){ if(!ME){GO('home');return;} selDiff=diffEl.value||'normal'; selMode=exMode||'practice'; renderSetup(); $('setup-overlay').classList.add('show'); };
+document.querySelectorAll('#setup-diff .subtab').forEach(b=>b.addEventListener('click',()=>{selDiff=b.dataset.d;if(selDiff!=='extreme')selMode='practice';renderSetup();}));
+document.querySelectorAll('#setup-mode .subtab').forEach(b=>b.addEventListener('click',()=>{selMode=b.dataset.m;renderSetup();}));
+$('setup-cancel').addEventListener('click',()=>$('setup-overlay').classList.remove('show'));
+function startFromSetup(){ $('setup-overlay').classList.remove('show'); diffEl.value=selDiff; exMode=selMode; GO('game'); }
+$('setup-start').addEventListener('click',startFromSetup);
 function renderNav(){const nav=$('nav'),who=$('who');nav.innerHTML='';
   const add=(l,f,c)=>{const b=document.createElement('button');b.textContent=l;b.className='nav-btn '+(c||'');b.onclick=f;nav.appendChild(b);};
   add('🏆 순위표',()=>GO('home'));
-  if(ME){add('🎮 게임',()=>GO('game'));add('📊 내 기록',()=>GO('records'));add('로그아웃',()=>signOut(auth),'ghost');who.innerHTML='<b>'+esc(ME.displayName)+'</b>'+(ME.isAdmin?' · 총관리자':'');}
+  if(ME){add('🎮 게임',()=>OPENSETUP());add('📊 내 기록',()=>GO('records'));add('로그아웃',()=>signOut(auth),'ghost');who.innerHTML='<b>'+esc(ME.displayName)+'</b>'+(ME.isAdmin?' · 총관리자':'');}
   else who.textContent='로그인하지 않음';
 }
 
