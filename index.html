@@ -232,7 +232,9 @@ function finish(){
     run.results.push({cpm:s.cpm,acc:s.acc,time:sec});
     if(run.idx<run.total-1){showStats(s.cpm,s.acc,sec,s.err);$('r-title').textContent='🏅 기록 '+(run.idx+1)+' / '+run.total+' 완료';extra.innerHTML='남은 지문을 모두 쳐야 평균 기록이 제출됩니다.';addBtn('다음 지문 ▶',nextRunItem);overlay.classList.add('show');return;}
     const aCpm=avgOf(run.results,'cpm'),aAcc=avgOf(run.results,'acc');let tT=0;run.results.forEach(x=>tT+=x.time);
-    showStats(aCpm,aAcc,tT,null);$('r-title').textContent='🏅 기록모드 완료 — '+run.total+'지문 평균';addBtn('🏅 새 기록 도전',startTurn);
+    showStats(aCpm,aAcc,tT,null);$('r-title').textContent='🏅 기록모드 완료 — '+run.total+'지문 평균';
+    addBtn('🏆 순위표로 돌아가기',()=>{overlay.classList.remove('show');GO('home');});
+    addBtn('🏅 새 기록 도전',startTurn);
     submitRecord(diff,aCpm,aAcc,tT,extra);overlay.classList.add('show');return;
   }
   if(diff==='extreme'&&exMode==='practice'){showStats(s.cpm,s.acc,sec,s.err);$('r-title').textContent='🎯 연습 결과';extra.innerHTML='🎯 <b>연습모드</b> — 순위 미반영. 기록모드로 도전하세요!';addBtn('다시 도전!',startTurn);overlay.classList.add('show');return;}
