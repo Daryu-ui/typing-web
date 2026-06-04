@@ -11,7 +11,8 @@
   .home-top{display:grid;grid-template-columns:1fr 1.5fr;gap:16px;margin-bottom:18px;}
   .home-bottom{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
   @media(max-width:760px){.home-top,.home-bottom{grid-template-columns:1fr;}}
-  #hof-scroll{height:166px;overflow:hidden;} #hof-list .hof{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:13px 8px;border-bottom:1px dashed var(--line);font-size:15px;white-space:nowrap;}
+  #hof-scroll{overflow:hidden;} #hof-list .hof{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:16px 8px;border-bottom:1px dashed var(--line);font-size:15px;white-space:nowrap;}
+  #hof-list .hof:last-child{border-bottom:none;}
   #hof-list .hof b{color:var(--accent);} #hof-list .hof .d{color:var(--accent-2);font-weight:700;}
   .logbox{font-size:13px;} .logbox .row{display:flex;justify-content:space-between;gap:8px;padding:6px 4px;border-bottom:1px solid var(--line);}
   .logbox .row .d{color:var(--muted);} .pill{font-size:11px;padding:1px 7px;border-radius:999px;background:rgba(56,189,248,.15);color:var(--accent-2);font-weight:700;}
@@ -542,7 +543,7 @@ function renderMyLog(){if($('mylog'))fetchLogs(ME.email,30).then(r=>$('mylog').i
 $('mylog-refresh').addEventListener('click',renderMyLog);
 let hofTimer=null,hofIdx=0;
 function renderHallOfFame(){const el=$('hof-list');if(!el)return;el.innerHTML='';DIFFS.forEach(d=>{let top=null;usersCache.forEach(u=>{const e=u.best&&u.best[d];if(e&&(e.n||0)>=QUALIFY){if(!top||e.score>top.score)top={name:u.name||u.email,score:e.score};}});const div=document.createElement('div');div.className='hof';div.innerHTML='<span class="pill d-'+d+'">'+DLABEL[d]+'</span><span>'+(top?('🥇 <b>'+top.score+'</b> '+esc(top.name)):'<span style="color:var(--muted)">아직 없음</span>')+'</span>';el.appendChild(div);});}
-function startHof(){stopHof();const box=$('hof-scroll');hofTimer=setInterval(()=>{const rows=box.querySelectorAll('.hof');if(rows.length<2)return;hofIdx=(hofIdx+1)%rows.length;box.scrollTo({top:rows[hofIdx].offsetTop-rows[0].offsetTop,behavior:'smooth'});},2200);}
+function startHof(){stopHof();}   /* 난이도별 1위는 자동 스크롤 없이 4줄 고정 표시 */
 function stopHof(){if(hofTimer){clearInterval(hofTimer);hofTimer=null;}}
 
 // ===== 검색 / 사람 상세 =====
