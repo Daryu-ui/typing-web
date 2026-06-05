@@ -55,10 +55,17 @@
   .stat{background:linear-gradient(180deg,rgba(56,189,248,.10),rgba(30,41,59,.35));border:1px solid var(--line);border-radius:16px;padding:15px 12px;text-align:center;}
   .stat .label{color:var(--muted);font-size:12.5px;} .stat .value{font-size:28px;font-weight:800;margin-top:4px;} .stat .unit{font-size:12.5px;color:var(--muted);}
   #v-cpm .value{color:var(--accent);} #v-acc .value{color:var(--ok);} #v-time .value{color:var(--accent-2);} #v-err .value{color:var(--bad);}
-  #target{font-size:25px;line-height:1.95;letter-spacing:.5px;font-family:"D2Coding","Consolas",monospace;word-break:break-word;user-select:none;}
-  #target .char.correct{color:var(--ok);} #target .char.wrong{color:#fff;background:var(--bad);border-radius:3px;} #target .char.wrong.space{background:rgba(239,68,68,.5);}
-  #target .char.current{background:rgba(251,191,36,.28);border-radius:3px;box-shadow:inset 0 -3px 0 var(--accent);} #target .char.pending{color:var(--muted);}
-  #typed{width:100%;min-height:88px;resize:vertical;font-size:23px;line-height:1.7;font-family:"D2Coding","Consolas",monospace;background:rgba(15,23,42,.6);color:var(--text);border:2px solid var(--line);border-radius:14px;padding:14px 16px;outline:none;}
+  /* 한컴타자연습식: 원문 한 줄, 바로 아래에 내가 친 글자가 정렬되어 표시 */
+  #target{font-family:"D2Coding","Consolas","Courier New",monospace;font-size:24px;line-height:1.3;display:flex;flex-wrap:wrap;align-items:flex-start;row-gap:18px;user-select:none;min-height:62px;}
+  #target .word{display:inline-flex;}
+  #target .cell{display:inline-flex;flex-direction:column;min-width:.62em;}
+  #target .cell .ref{text-align:center;color:var(--text);padding:0 1px;}
+  #target .cell .ref.cur{background:rgba(251,191,36,.30);border-radius:4px;}
+  #target .cell .inp{text-align:center;color:var(--ok);background:rgba(56,189,248,.07);border-top:2px solid var(--line);padding:2px 1px 0;margin-top:4px;}
+  #target .cell .inp.no{color:#fff;background:var(--bad);}
+  #target .cell .inp.cur{border-top-color:var(--accent);box-shadow:inset 0 -3px 0 var(--accent);background:rgba(251,191,36,.12);}
+  #type-wrap{position:relative;cursor:text;}
+  #type-wrap #typed{position:absolute;inset:0;width:100%;height:100%;min-height:0;border:none;outline:none;padding:0;margin:0;resize:none;background:transparent;color:transparent;caret-color:transparent;font-size:24px;}
   #typed:focus{border-color:var(--accent-2);} #typed:disabled{opacity:.6;}
   .controls{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:8px;} #progress{color:var(--accent-2);font-weight:700;}
   .qbar{margin-top:12px;color:var(--muted);font-size:14px;text-align:center;} .qbar b{color:var(--accent);}
@@ -174,9 +181,11 @@
       <div class="stat" id="v-err"><div class="label">오타</div><div class="value">0<span class="unit">개</span></div></div>
     </div>
     <div class="card">
-      <div class="card-title"><span>📖 문장을 보고 바로 아래 칸에 따라 치세요</span><span id="progress"></span></div>
-      <div id="target"></div>
-      <textarea id="typed" placeholder="여기를 클릭하고, 위 문장을 보며 타이핑하세요..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="margin-top:14px"></textarea>
+      <div class="card-title"><span>📖 윗줄을 보고, 바로 아래줄에 따라 치세요</span><span id="progress"></span></div>
+      <div id="type-wrap">
+        <div id="target"></div>
+        <textarea id="typed" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+      </div>
     </div>
     <div class="card">
       <div id="exmode-row" class="hidden" style="display:flex;gap:8px;justify-content:center;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
@@ -382,7 +391,24 @@ let inContest=false, CONTEST=null, CONTEST_INFO=null;   // 대회 모드
 
 function pickSentence(){const S=sentences();let p=(S[diffEl.value]||S.normal).filter(s=>!hasHangul(s));if(!p.length)p=S[diffEl.value]||S.normal;return sanitizeSentence(p[Math.floor(Math.random()*p.length)]);}
 function pickN(n){let base=(sentences().extreme||[]).filter(s=>!hasHangul(s));if(!base.length)base=(sentences().extreme||[]);let pool=base.slice();const out=[];for(let i=0;i<n;i++){if(!pool.length)pool=base.slice();out.push(pool.length?sanitizeSentence(pool.splice(Math.floor(Math.random()*pool.length),1)[0]):'');}return out;}
-function renderTarget(typed){const frag=document.createDocumentFragment();for(let i=0;i<target.length;i++){const sp=document.createElement('span');const ch=target[i];sp.textContent=ch;sp.className='char';if(ch===' ')sp.classList.add('space');if(i<typed.length)sp.classList.add(typed[i]===ch?'correct':'wrong');else if(i===typed.length)sp.classList.add('current');else sp.classList.add('pending');frag.appendChild(sp);}targetEl.innerHTML='';targetEl.appendChild(frag);}
+function renderTarget(typed){
+  const t=target,frag=document.createDocumentFragment();let i=0;
+  const NB=' ';
+  const makeCell=idx=>{
+    const ch=t[idx],cell=document.createElement('span');cell.className='cell';
+    const ref=document.createElement('span');ref.className='ref';ref.textContent=(ch===' '?NB:ch);
+    if(idx===typed.length)ref.classList.add('cur');
+    const inp=document.createElement('span');inp.className='inp';
+    if(idx<typed.length){const tc=typed[idx];inp.textContent=(tc===' '?NB:tc);if(tc!==ch)inp.classList.add('no');}
+    else{inp.textContent=NB;if(idx===typed.length)inp.classList.add('cur');}
+    cell.appendChild(ref);cell.appendChild(inp);return cell;
+  };
+  while(i<t.length){
+    if(t[i]===' '){const sp=makeCell(i);sp.classList.add('sp');frag.appendChild(sp);i++;}
+    else{const w=document.createElement('span');w.className='word';while(i<t.length&&t[i]!==' '){w.appendChild(makeCell(i));i++;}frag.appendChild(w);}
+  }
+  targetEl.innerHTML='';targetEl.appendChild(frag);
+}
 function computeStats(typed){let cor=0,err=0,n=Math.min(typed.length,target.length);for(let i=0;i<n;i++){if(typed[i]===target[i])cor++;else err++;}if(typed.length>target.length)err+=typed.length-target.length;const acc=typed.length===0?100:Math.round(cor/typed.length*100);let cpm=0;if(startTime){const m=(Date.now()-startTime)/60000;if(m>0)cpm=Math.round(typed.length/m);}return{cor,err,acc,cpm};}
 function updateStatsDisplay(t){const s=computeStats(t);vCpm.textContent=s.cpm.toLocaleString();vAcc.innerHTML=s.acc+'<span class="unit">%</span>';vErr.innerHTML=s.err+'<span class="unit">개</span>';return s;}
 function updateTime(){if(!startTime)return;vTime.innerHTML=((Date.now()-startTime)/1000).toFixed(1)+'<span class="unit">초</span>';}
