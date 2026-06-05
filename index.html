@@ -663,16 +663,43 @@ async function savePdfSentences(){
   catch(e){msg.style.color='var(--bad)';msg.textContent='저장 실패: '+e.message;}
 }
 
+let openBatchId=null;   // 펼쳐진 묶음 id (재렌더 후에도 유지)
 function renderBatchList(){
   const el=$('batch-list');if(!el)return;
   if(!LIBRARY.length){el.innerHTML='<div style="color:var(--muted);padding:10px">아직 추가한 파일이 없어요. 위에서 파일을 올려보세요.</div>';return;}
   el.innerHTML=LIBRARY.slice().reverse().map(b=>{const c=b.counts||{};
-    return '<div class="row" style="align-items:center"><span><b>'+esc(b.fileName||'(이름없음)')+'</b> <span class="pill">'+esc(b.type||'파일')+'</span><br><span class="d" style="font-size:12px">'+esc(b.addedAt||'')+' · 총 '+(c.total||0)+'문장 (<span style="color:#4ade80">쉬'+(c.easy||0)+'</span> <span style="color:#38bdf8">보'+(c.normal||0)+'</span> <span style="color:#c4b5fd">상'+(c.hard||0)+'</span> <span style="color:#fbbf24">극'+(c.extreme||0)+'</span>)</span></span><button class="ghost" onclick="window.DELBATCH(\''+b.id+'\')" style="padding:5px 11px;font-size:12px;border-color:var(--bad);color:var(--bad)">🗑️ 삭제</button></div>';
+    return '<div style="border-bottom:1px solid var(--line);padding:9px 4px">'
+      +'<div class="row" style="align-items:center;border:none;padding:0"><span><b>'+esc(b.fileName||'(이름없음)')+'</b> <span class="pill">'+esc(b.type||'파일')+'</span><br><span class="d" style="font-size:12px">'+esc(b.addedAt||'')+' · 총 '+(c.total||0)+'문장 (<span style="color:#4ade80">쉬'+(c.easy||0)+'</span> <span style="color:#38bdf8">보'+(c.normal||0)+'</span> <span style="color:#c4b5fd">상'+(c.hard||0)+'</span> <span style="color:#fbbf24">극'+(c.extreme||0)+'</span>)</span></span>'
+      +'<span style="display:flex;gap:6px">'
+        +'<button class="ghost" onclick="window.BATCHEDIT(\''+b.id+'\')" style="padding:5px 11px;font-size:12px">'+(openBatchId===b.id?'▲ 접기':'📂 보기/편집')+'</button>'
+        +'<button class="ghost" onclick="window.DELBATCH(\''+b.id+'\')" style="padding:5px 11px;font-size:12px;border-color:var(--bad);color:var(--bad)">🗑️ 삭제</button>'
+      +'</span></div><div id="batch-ed-'+b.id+'"></div></div>';
   }).join('');
+  if(openBatchId&&LIBRARY.some(b=>b.id===openBatchId))renderBatchEditor(openBatchId);
 }
+function renderBatchEditor(id){
+  const box=$('batch-ed-'+id);if(!box)return;
+  const b=LIBRARY.find(x=>x.id===id);if(!b){box.innerHTML='';return;}
+  let h='<div style="margin:8px 0 4px;color:var(--muted);font-size:12.5px">추출된 문장입니다. 직접 <b>수정</b>하거나 줄을 지워 <b>삭제</b>한 뒤 <b>변경 저장</b>을 누르세요. (난이도 칸 사이로 옮겨 적어도 됩니다)</div>';
+  DIFFS.forEach(d=>{const arr=(b.sentences&&b.sentences[d])||[];h+='<div style="margin-bottom:8px"><div style="font-weight:700;margin-bottom:3px"><span class="pill d-'+d+'">'+DLABEL[d]+'</span> '+arr.length+'문장</div><textarea id="bed-'+id+'-'+d+'" style="width:100%;min-height:58px;font-size:13px;font-family:monospace;background:rgba(15,23,42,.6);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px">'+esc(arr.join("\n"))+'</textarea></div>';});
+  h+='<div class="controls" style="justify-content:flex-start;margin:4px 0 8px"><button class="primary" onclick="window.BATCHSAVE(\''+id+'\')" style="padding:7px 14px;font-size:13px">💾 변경 저장</button><span id="bmsg-'+id+'" style="font-size:13px;color:var(--ok)"></span></div>';
+  box.innerHTML=h;
+}
+window.BATCHEDIT=function(id){ openBatchId=(openBatchId===id)?null:id; renderBatchList(); };
+window.BATCHSAVE=async function(id){
+  const msg=$('bmsg-'+id);if(msg){msg.style.color='var(--muted)';msg.textContent='저장 중...';}
+  const sentences={easy:[],normal:[],hard:[],extreme:[]};let total=0;
+  DIFFS.forEach(d=>{const ta=$('bed-'+id+'-'+d);const lines=((ta&&ta.value)||'').split(/\n+/).map(s=>sanitizeSentence(s)).filter(s=>s.length>=8&&!hasHangul(s)&&/[A-Za-z]/.test(s));sentences[d]=Array.from(new Set(lines));total+=sentences[d].length;});
+  let batches;
+  if(!total){ if(!confirm('이 묶음의 문장이 모두 비었습니다. 묶음을 삭제할까요?')){if(msg){msg.style.color='var(--muted)';msg.textContent='';}return;} batches=LIBRARY.filter(x=>x.id!==id); openBatchId=null; }
+  else { batches=LIBRARY.map(b=>b.id===id?Object.assign({},b,{sentences,counts:{easy:sentences.easy.length,normal:sentences.normal.length,hard:sentences.hard.length,extreme:sentences.extreme.length,total}}):b); }
+  try{await setDoc(doc(db,'content','library'),{batches});if(msg){msg.style.color='var(--ok)';msg.textContent='✅ 저장됨 ('+total+'문장)';}}
+  catch(e){if(msg){msg.style.color='var(--bad)';msg.textContent='실패: '+e.message;}}
+};
 window.DELBATCH=async function(id){
   const b=LIBRARY.find(x=>x.id===id);if(!b)return;
   if(!confirm('"'+(b.fileName||'')+'" 묶음과 그 안의 '+((b.counts&&b.counts.total)||0)+'개 지문을 삭제할까요?\n(이 파일로 만든 지문이 게임에서 사라집니다. 기본 내장 지문은 유지됩니다.)'))return;
+  if(openBatchId===id)openBatchId=null;
   try{await setDoc(doc(db,'content','library'),{batches:LIBRARY.filter(x=>x.id!==id)});}
   catch(e){alert('삭제 실패: '+e.message);}
 };
