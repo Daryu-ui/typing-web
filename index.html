@@ -173,10 +173,12 @@
       <div class="stat" id="v-time"><div class="label">시간</div><div class="value">0.0<span class="unit">초</span></div></div>
       <div class="stat" id="v-err"><div class="label">오타</div><div class="value">0<span class="unit">개</span></div></div>
     </div>
-    <div class="card"><div class="card-title"><span>📖 따라 칠 문장</span><span id="progress"></span></div><div id="target"></div></div>
     <div class="card">
-      <div class="card-title">⌨️ 여기에 입력</div>
-      <textarea id="typed" placeholder="여기를 클릭하고 타이핑을 시작하세요..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+      <div class="card-title"><span>📖 문장을 보고 바로 아래 칸에 따라 치세요</span><span id="progress"></span></div>
+      <div id="target"></div>
+      <textarea id="typed" placeholder="여기를 클릭하고, 위 문장을 보며 타이핑하세요..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="margin-top:14px"></textarea>
+    </div>
+    <div class="card">
       <div id="exmode-row" class="hidden" style="display:flex;gap:8px;justify-content:center;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
         <span style="color:var(--muted);font-size:13px;">극상 모드:</span>
         <button class="subtab active" data-m="practice">🎯 연습</button>
