@@ -7,6 +7,9 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
   .home-top{display:grid;grid-template-columns:1fr 1.5fr;gap:16px;margin-bottom:18px;}
   .home-bottom{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
@@ -204,16 +207,28 @@
 
   <!-- 관리자: 전체 기록 -->
   <section id="view-admin" class="hidden">
-    <div class="card">
-      <div class="card-title"><span>📄 PDF로 지문 추가 <span style="color:var(--accent-2);font-size:12px">(문장 추출 · 길이 기준 자동 난이도 분류)</span></span><span id="pdf-extra-count" style="color:var(--muted);font-size:12px"></span></div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-        <input type="file" id="pdf-file" accept="application/pdf" style="font-size:13px;color:var(--text);">
-        <button id="pdf-extract" class="ghost">📑 텍스트 추출</button>
-        <span id="pdf-status" style="color:var(--muted);font-size:13px"></span>
+    <div class="card" id="admin-card-sentences">
+      <div class="card-title"><span>📄 파일로 지문 추가 <span style="color:var(--accent-2);font-size:12px">(PDF·TXT·Word·Excel·한글hwpx → 문장 추출·자동 난이도 분류)</span></span><span id="pdf-extra-count" style="color:var(--muted);font-size:12px"></span></div>
+      <div id="drop-zone" style="border:2px dashed var(--line);border-radius:14px;padding:22px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s;">
+        <div style="font-size:15px;color:var(--text)">📂 여기로 파일을 끌어다 놓거나 <b style="color:var(--accent-2)">클릭</b>해서 선택하세요</div>
+        <div style="font-size:12px;margin-top:6px;color:var(--muted)">지원: PDF · TXT · Word(.docx) · Excel(.xlsx/.xls) · 한글(.hwpx) <span style="color:var(--bad)">/ 구버전 .hwp·.doc는 미지원</span></div>
+        <input type="file" id="pdf-file" accept=".pdf,.txt,.docx,.xls,.xlsx,.hwpx" style="display:none">
       </div>
+      <div style="margin-top:10px"><span id="pdf-status" style="color:var(--muted);font-size:13px"></span></div>
       <div id="pdf-preview" class="hidden" style="margin-top:14px"></div>
+
+      <div class="card-title" style="margin-top:20px"><span>✍️ 문장 수동 추가</span></div>
+      <textarea id="manual-text" placeholder="한 줄에 한 문장씩 입력하세요. (영어만, 마침표로 끝나지 않아도 됨)" style="width:100%;min-height:72px;font-size:14px;font-family:monospace;background:rgba(15,23,42,.6);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px"></textarea>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
+        <select id="manual-diff"><option value="auto">난이도: 자동(길이기준)</option><option value="easy">쉬움</option><option value="normal">보통</option><option value="hard">상급</option><option value="extreme">극상</option></select>
+        <button class="primary" id="manual-add">➕ 추가</button>
+        <span id="manual-msg" style="font-size:13px;color:var(--ok)"></span>
+      </div>
+
+      <div class="card-title" style="margin-top:20px"><span>🗂️ 추가한 파일/문장 묶음 (로그)</span></div>
+      <div id="batch-list" style="font-size:13px"></div>
     </div>
-    <div class="card">
+    <div class="card" id="admin-card-records">
       <div class="card-title">
         <span>🛠️ 관리자 — 전체 참가자 기록</span>
         <span>
@@ -225,6 +240,11 @@
         <thead><tr><th>이름</th><th>구분</th><th>쉬움</th><th>보통</th><th>상급</th><th>극상</th><th>총도전</th><th></th></tr></thead>
         <tbody id="adm-body"></tbody>
       </table></div>
+    </div>
+    <div class="card" id="admin-card-access">
+      <div class="card-title"><span>👥 접속 기록 · 부관리자 관리 <span style="color:var(--accent-2);font-size:12px">(총관리자 전용)</span></span><span id="acc-info" style="color:var(--muted);font-size:12px"></span></div>
+      <div style="color:var(--muted);font-size:12.5px;margin-bottom:8px">한 번이라도 접속한 사람 목록입니다. <b>부관리자</b>로 지정하고, 부여할 편집 권한을 체크하세요.</div>
+      <div id="access-list" style="max-height:460px;overflow:auto"></div>
     </div>
   </section>
 </div>
@@ -311,6 +331,15 @@ const C = window.APP_CONFIG;
 const QUALIFY = C.qualifyCount || 3;
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+// 이름 끝이 'T'면 교사로 인정. 역할 표기: 관리자→교사-총관리자, 교사→교사, 학생→(표기 없음)
+const isTeacherName = n => !!n && String(n).trim().slice(-1).toUpperCase()==='T';
+const roleTag = (name,isAdmin) => isAdmin?'교사-총관리자':(isTeacherName(name)?'교사':'');
+const dispName = n => String(n||'').replace(/\s*선생님\s*$/,'').trim();   // 표시용: 뒤의 '선생님' 제거
+const PERMS = [{key:'sentences',label:'지문/파일 편집'},{key:'contest',label:'대회 개설·종료'},{key:'records',label:'기록 삭제·관리'}];
+const can = p => !!ME && (ME.isAdmin || (Array.isArray(ME.perms)&&ME.perms.includes(p)));
+// 지문 정화: 가운데 점(·), 동그라미 숫자(①) 등 제거
+function sanitizeSentence(s){return String(s||'').replace(/[·•・∙‧⸳]/g,' ').replace(/[①-⓿❶-➓㉑-㊿Ⅰ-ⅿ]/g,'').replace(/\s+/g,' ').trim();}
+function hasHangul(s){return /[가-힣ㄱ-ㅎㅏ-ㅣ]/.test(s);}
 document.getElementById('qc2').textContent = QUALIFY;
 
 let app, auth, db, ME=null, myData={best:{}};
@@ -338,7 +367,7 @@ const SENTENCES = {
     "Grumpy wizards make toxic brews for the jovial queen and king. Quartz glyphs vex a numb finch. The wandering zebra quickly jumped the fence beside the old, foggy barn."
   ]
 };
-let EXTRA = null; // 관리자 추가 지문(content/sentences)
+let EXTRA = null; // 관리자 추가 지문 (content/library 의 모든 파일 묶음을 합친 결과)
 function sentences(){ if(EXTRA){ const m={}; for(const k in SENTENCES){ m[k]=SENTENCES[k].concat(EXTRA[k]||[]); } return m; } return SENTENCES; }
 
 // ===== 게임 엔진 =====
@@ -349,8 +378,8 @@ let target="",startTime=null,timerId=null,finished=false,lastDiff='extreme';
 let RUN_N=3, exMode='practice', run=null;
 let inContest=false, CONTEST=null, CONTEST_INFO=null;   // 대회 모드
 
-function pickSentence(){const S=sentences();const p=S[diffEl.value]||S.normal;return p[Math.floor(Math.random()*p.length)];}
-function pickN(n){let pool=(sentences().extreme||[]).slice();const out=[];for(let i=0;i<n;i++){if(!pool.length)pool=(sentences().extreme||[]).slice();out.push(pool.length?pool.splice(Math.floor(Math.random()*pool.length),1)[0]:'');}return out;}
+function pickSentence(){const S=sentences();let p=(S[diffEl.value]||S.normal).filter(s=>!hasHangul(s));if(!p.length)p=S[diffEl.value]||S.normal;return sanitizeSentence(p[Math.floor(Math.random()*p.length)]);}
+function pickN(n){let base=(sentences().extreme||[]).filter(s=>!hasHangul(s));if(!base.length)base=(sentences().extreme||[]);let pool=base.slice();const out=[];for(let i=0;i<n;i++){if(!pool.length)pool=base.slice();out.push(pool.length?sanitizeSentence(pool.splice(Math.floor(Math.random()*pool.length),1)[0]):'');}return out;}
 function renderTarget(typed){const frag=document.createDocumentFragment();for(let i=0;i<target.length;i++){const sp=document.createElement('span');const ch=target[i];sp.textContent=ch;sp.className='char';if(ch===' ')sp.classList.add('space');if(i<typed.length)sp.classList.add(typed[i]===ch?'correct':'wrong');else if(i===typed.length)sp.classList.add('current');else sp.classList.add('pending');frag.appendChild(sp);}targetEl.innerHTML='';targetEl.appendChild(frag);}
 function computeStats(typed){let cor=0,err=0,n=Math.min(typed.length,target.length);for(let i=0;i<n;i++){if(typed[i]===target[i])cor++;else err++;}if(typed.length>target.length)err+=typed.length-target.length;const acc=typed.length===0?100:Math.round(cor/typed.length*100);let cpm=0;if(startTime){const m=(Date.now()-startTime)/60000;if(m>0)cpm=Math.round(typed.length/m);}return{cor,err,acc,cpm};}
 function updateStatsDisplay(t){const s=computeStats(t);vCpm.textContent=s.cpm.toLocaleString();vAcc.innerHTML=s.acc+'<span class="unit">%</span>';vErr.innerHTML=s.err+'<span class="unit">개</span>';return s;}
@@ -435,14 +464,14 @@ $('r-review-save').addEventListener('click',()=>{const m=$('r-review-msg');const
 const VIEWS=['login','home','game','records','admin'];
 window.GO=function(v){
   if((v==='game'||v==='records')&&!ME){v='home';}
-  if(v==='admin'&&(!ME||!ME.isAdmin)){v='home';}
+  if(v==='admin'&&(!ME||!(ME.isAdmin||ME.subAdmin))){v='home';}
   if(v!=='game')inContest=false;
   const heroEl=document.querySelector('.hero');if(heroEl)heroEl.style.display=(v==='home'?'none':'');
   VIEWS.forEach(x=>$('view-'+x).classList.toggle('hidden',x!==v));
   if(v==='home'){startScroll();startHof();renderRadar();renderMyLog();renderHallOfFame();renderContestWinners();}else{stopScroll();stopHof();}
   if(v==='game'){applyModeUI();startTurn();updateQbar();}
   if(v==='records')renderMyRecords();
-  if(v==='admin')renderAdmin();
+  if(v==='admin'){renderAdmin();if(ME&&ME.isAdmin)loadAccessHistory();}
   window.scrollTo(0,0);
 };
 $('title').addEventListener('click',()=>GO(ME?'home':'login'));
@@ -470,9 +499,9 @@ function renderNav(){const nav=$('nav'),who=$('who');nav.innerHTML='';who.innerH
     add('🔎 검색',()=>doSearch());
     {const ob=document.createElement('button');ob.className='nav-btn';ob.id='online-btn';ob.textContent='🟢 접속 '+ONLINE.length+'명';ob.onclick=()=>openOnline();nav.appendChild(ob);}
     add('로그아웃',()=>signOut(auth),'ghost');
-    const info=document.createElement('span');info.innerHTML='<b>'+esc(ME.displayName)+'</b>'+(ME.isAdmin?' · 총관리자':'');
+    const info=document.createElement('span');const rt=roleTag(ME.displayName,ME.isAdmin);info.innerHTML='<b>'+esc(ME.displayName)+'</b>'+(rt?' · '+rt:'');
     who.appendChild(info);
-    if(ME.isAdmin){const ab=document.createElement('button');ab.textContent='🛠️ 관리자';ab.className='nav-btn';ab.style.marginLeft='4px';ab.onclick=()=>GO('admin');who.appendChild(ab);}
+    if(ME.isAdmin||ME.subAdmin){const ab=document.createElement('button');ab.textContent=ME.isAdmin?'🛠️ 관리자':'🛠️ 부관리자';ab.className='nav-btn';ab.style.marginLeft='4px';ab.onclick=()=>GO('admin');who.appendChild(ab);}
   } else who.textContent='로그인하지 않음';
   updateContestBtn();
 }
@@ -502,7 +531,7 @@ function renderLeaderboard(){
   top.forEach((r,i)=>{const tr=document.createElement('tr');if(ME&&r.email===ME.email)tr.className='me';
     const med=i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1);
     let rev=r.review?esc(r.review):'';if(ME&&r.email===ME.email)rev=(r.review?'<span style="color:var(--accent-2)">'+esc(r.review)+'</span> ':'')+'<button onclick="window.EDITREV()" style="padding:3px 8px;font-size:12px">✏️</button>';
-    tr.innerHTML='<td class="medal">'+med+'</td><td class="name">'+esc(r.name)+'</td><td><b class="accent">'+r.score.toLocaleString()+'</b></td><td>'+r.cpm.toLocaleString()+'</td><td>'+r.acc+'%</td><td>'+r.n+'회</td><td style="text-align:left;font-size:13px">'+rev+'</td>';
+    tr.innerHTML='<td class="medal">'+med+'</td><td class="name">'+esc(dispName(r.name))+'</td><td><b class="accent">'+r.score.toLocaleString()+'</b></td><td>'+r.cpm.toLocaleString()+'</td><td>'+r.acc+'%</td><td>'+r.n+'회</td><td style="text-align:left;font-size:13px">'+rev+'</td>';
     body.appendChild(tr);});
 }
 window.EDITREV=function(){const e=myData.best&&myData.best[curDiff];const t=prompt('['+DLABEL[curDiff]+'] 후기 (최대 120자)',(e&&e.review)||'');if(t===null)return;const ee=Object.assign({n:0,score:0,cpm:0,acc:0,review:''},e||{});ee.review=t.slice(0,120);const upd={};upd['best.'+curDiff]=ee;updateDoc(doc(db,'users',ME.email),upd).catch(()=>{});};
@@ -518,9 +547,9 @@ $('lb-scroll').addEventListener('mouseleave',()=>{if(!$('view-home').classList.c
 
 // ===== 접속 현황 =====
 let ONLINE=[];
-function heartbeat(){if(!ME)return;setDoc(doc(db,'presence',ME.email),{name:ME.displayName,role:ME.role,lastSeen:serverTimestamp()},{merge:true}).catch(()=>{});}
-function watchPresence(){onSnapshot(collection(db,'presence'),snap=>{const now=Date.now();ONLINE=[];snap.forEach(d=>{const x=d.data();const ms=x.lastSeen&&x.lastSeen.toMillis?x.lastSeen.toMillis():0;if(now-ms<=70000)ONLINE.push({name:x.name||d.id,role:x.role});});const oc=$('online-count');if(oc)oc.textContent=ONLINE.length;const ob=$('online-btn');if(ob)ob.textContent='🟢 접속 '+ONLINE.length+'명';if($('online-overlay').classList.contains('show'))openOnline();});}
-function openOnline(){$('ol-count').textContent=ONLINE.length;$('ol-list').innerHTML=ONLINE.length?ONLINE.map(o=>'<div class="row"><span><b>'+esc(o.name)+'</b></span><span class="d">'+(o.role==='teacher'?'교사':'학생')+'</span></div>').join(''):'<div style="color:var(--muted);text-align:center;padding:14px">접속자가 없어요</div>';$('online-overlay').classList.add('show');}
+function heartbeat(){if(!ME)return;setDoc(doc(db,'presence',ME.email),{name:ME.displayName,role:ME.role,isAdmin:!!ME.isAdmin,lastSeen:serverTimestamp()},{merge:true}).catch(()=>{});}
+function watchPresence(){onSnapshot(collection(db,'presence'),snap=>{const now=Date.now();ONLINE=[];snap.forEach(d=>{const x=d.data();const ms=x.lastSeen&&x.lastSeen.toMillis?x.lastSeen.toMillis():0;if(now-ms<=70000)ONLINE.push({name:x.name||d.id,role:x.role,isAdmin:!!x.isAdmin});});const oc=$('online-count');if(oc)oc.textContent=ONLINE.length;const ob=$('online-btn');if(ob)ob.textContent='🟢 접속 '+ONLINE.length+'명';if($('online-overlay').classList.contains('show'))openOnline();});}
+function openOnline(){$('ol-count').textContent=ONLINE.length;$('ol-list').innerHTML=ONLINE.length?ONLINE.map(o=>'<div class="row"><span><b>'+esc(dispName(o.name))+'</b></span><span class="d">'+roleTag(o.name,o.isAdmin)+'</span></div>').join(''):'<div style="color:var(--muted);text-align:center;padding:14px">접속자가 없어요</div>';$('online-overlay').classList.add('show');}
 {const oo=$('online-open');if(oo)oo.addEventListener('click',openOnline);}
 $('ol-close').addEventListener('click',()=>$('online-overlay').classList.remove('show'));
 
@@ -542,27 +571,34 @@ async function fetchLogs(email,n){try{const s=await getDocs(query(collection(db,
 function renderMyLog(){if($('mylog'))fetchLogs(ME.email,30).then(r=>$('mylog').innerHTML=logHtml(r));}
 $('mylog-refresh').addEventListener('click',renderMyLog);
 let hofTimer=null,hofIdx=0;
-function renderHallOfFame(){const el=$('hof-list');if(!el)return;el.innerHTML='';DIFFS.forEach(d=>{let top=null;usersCache.forEach(u=>{const e=u.best&&u.best[d];if(e&&(e.n||0)>=QUALIFY){if(!top||e.score>top.score)top={name:u.name||u.email,score:e.score};}});const div=document.createElement('div');div.className='hof';div.innerHTML='<span class="pill d-'+d+'">'+DLABEL[d]+'</span><span>'+(top?('🥇 <b>'+top.score+'</b> '+esc(top.name)):'<span style="color:var(--muted)">아직 없음</span>')+'</span>';el.appendChild(div);});}
+function renderHallOfFame(){const el=$('hof-list');if(!el)return;el.innerHTML='';DIFFS.forEach(d=>{let top=null;usersCache.forEach(u=>{const e=u.best&&u.best[d];if(e&&(e.n||0)>=QUALIFY){if(!top||e.score>top.score)top={name:u.name||u.email,score:e.score};}});const div=document.createElement('div');div.className='hof';div.innerHTML='<span class="pill d-'+d+'">'+DLABEL[d]+'</span><span>'+(top?('🥇 <b>'+top.score+'</b> '+esc(dispName(top.name))):'<span style="color:var(--muted)">아직 없음</span>')+'</span>';el.appendChild(div);});}
 function startHof(){stopHof();}   /* 난이도별 1위는 자동 스크롤 없이 4줄 고정 표시 */
 function stopHof(){if(hofTimer){clearInterval(hofTimer);hofTimer=null;}}
 
 // ===== 검색 / 사람 상세 =====
 function rankIn(email,diff){const rows=[];usersCache.forEach(u=>{const e=u.best&&u.best[diff];if(e&&(e.n||0)>=QUALIFY)rows.push({email:u.email,score:e.score||0});});rows.sort((a,b)=>b.score-a.score);const i=rows.findIndex(r=>r.email===email);return i>=0?((i+1)+'위/'+rows.length):'미등재';}
-function openPerson(u){$('pp-name').textContent=u.name||u.email;renderRadarOn('pp-radar',u.best);let html='<table><thead><tr><th>난이도</th><th>점수</th><th>타수</th><th>정확도</th><th>도전</th><th>순위</th></tr></thead><tbody>';DIFFS.forEach(d=>{const e=(u.best&&u.best[d])||{};html+='<tr><td>'+DLABEL[d]+'</td><td><b class="accent">'+(e.score||0)+'</b></td><td>'+(e.cpm||0)+'</td><td>'+(e.acc||0)+'%</td><td>'+(e.n||0)+'회</td><td>'+rankIn(u.email,d)+'</td></tr>';});html+='</tbody></table>';$('pp-best').innerHTML=html;$('pp-log').innerHTML='<div style="color:var(--muted);padding:10px">불러오는 중...</div>';fetchLogs(u.email,20).then(r=>$('pp-log').innerHTML=logHtml(r));$('person-overlay').classList.add('show');}
+function openPerson(u){$('pp-name').textContent=dispName(u.name)||u.email;renderRadarOn('pp-radar',u.best);let html='<table><thead><tr><th>난이도</th><th>점수</th><th>타수</th><th>정확도</th><th>도전</th><th>순위</th></tr></thead><tbody>';DIFFS.forEach(d=>{const e=(u.best&&u.best[d])||{};html+='<tr><td>'+DLABEL[d]+'</td><td><b class="accent">'+(e.score||0)+'</b></td><td>'+(e.cpm||0)+'</td><td>'+(e.acc||0)+'%</td><td>'+(e.n||0)+'회</td><td>'+rankIn(u.email,d)+'</td></tr>';});html+='</tbody></table>';$('pp-best').innerHTML=html;$('pp-log').innerHTML='<div style="color:var(--muted);padding:10px">불러오는 중...</div>';fetchLogs(u.email,20).then(r=>$('pp-log').innerHTML=logHtml(r));$('person-overlay').classList.add('show');}
 function doSearch(){const kw=prompt('검색할 사람의 이름 또는 이메일');if(!kw)return;const k=kw.trim().toLowerCase();const f=usersCache.filter(u=>String(u.name||'').toLowerCase().includes(k)||String(u.email||'').toLowerCase().includes(k));if(!f.length){alert('찾는 사람이 없어요. (게임 기록이 있어야 검색돼요)');return;}openPerson(f[0]);}
 {const hs=$('home-search');if(hs)hs.addEventListener('click',doSearch);}
 $('pp-close').addEventListener('click',()=>$('person-overlay').classList.remove('show'));
 
 // ===== 관리자: 전체 기록 + CSV =====
-function renderAdmin(){const kw=($('adm-search').value||'').trim().toLowerCase();const body=$('adm-body');body.innerHTML='';const list=usersCache.slice().sort((a,b)=>((b.best&&b.best.extreme&&b.best.extreme.score)||0)-((a.best&&a.best.extreme&&a.best.extreme.score)||0));list.forEach(u=>{if(kw&&!(String(u.name||'').toLowerCase().includes(kw)||String(u.email||'').toLowerCase().includes(kw)))return;const b=u.best||{};const cell=d=>{const e=b[d];return e?((e.score||0)+' ('+(e.n||0)+'회)'):'-';};let tot=0;DIFFS.forEach(d=>{if(b[d])tot+=b[d].n||0;});const tr=document.createElement('tr');tr.innerHTML='<td class="name">'+esc(u.name||u.email)+'</td><td>'+(u.role==='teacher'?'교사':'학생')+'</td><td>'+cell('easy')+'</td><td>'+cell('normal')+'</td><td>'+cell('hard')+'</td><td>'+cell('extreme')+'</td><td>'+tot+'</td><td></td>';const btn=document.createElement('button');btn.textContent='상세';btn.className='ghost';btn.style.cssText='padding:4px 10px;font-size:12px';btn.onclick=()=>openPerson(u);tr.lastChild.appendChild(btn);body.appendChild(tr);});}
+function renderAdmin(){
+  const cS=$('admin-card-sentences'),cA=$('admin-card-access');
+  if(cS)cS.style.display=can('sentences')?'':'none';
+  if(cA)cA.style.display=(ME&&ME.isAdmin)?'':'none';
+  if(ME&&ME.isAdmin)renderAccessList();
+  const kw=($('adm-search').value||'').trim().toLowerCase();const body=$('adm-body');body.innerHTML='';const list=usersCache.slice().sort((a,b)=>((b.best&&b.best.extreme&&b.best.extreme.score)||0)-((a.best&&a.best.extreme&&a.best.extreme.score)||0));list.forEach(u=>{if(kw&&!(String(u.name||'').toLowerCase().includes(kw)||String(u.email||'').toLowerCase().includes(kw)))return;const b=u.best||{};const cell=d=>{const e=b[d];return e?((e.score||0)+' ('+(e.n||0)+'회)'):'-';};let tot=0;DIFFS.forEach(d=>{if(b[d])tot+=b[d].n||0;});const tr=document.createElement('tr');tr.innerHTML='<td class="name">'+esc(dispName(u.name)||u.email)+'</td><td>'+(roleTag(u.name,u.isAdmin)||'학생')+'</td><td>'+cell('easy')+'</td><td>'+cell('normal')+'</td><td>'+cell('hard')+'</td><td>'+cell('extreme')+'</td><td>'+tot+'</td><td></td>';const btn=document.createElement('button');btn.textContent='상세';btn.className='ghost';btn.style.cssText='padding:4px 10px;font-size:12px';btn.onclick=()=>openPerson(u);tr.lastChild.appendChild(btn);body.appendChild(tr);});}
 $('adm-search').addEventListener('input',renderAdmin);
 function csvEsc(s){s=String(s==null?'':s);return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
 function download(name,content){const blob=new Blob(['﻿'+content],{type:'text/csv;charset=utf-8;'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();}
 $('adm-csv-all').addEventListener('click',()=>{const rows=[['이름','구분','이메일','난이도','최고점수','최고타수','정확도','도전횟수','후기']];usersCache.forEach(u=>{const b=u.best||{};DIFFS.forEach(d=>{const e=b[d];if(e)rows.push([u.name||u.email,u.role==='teacher'?'교사':'학생',u.email,DLABEL[d],e.score||0,e.cpm||0,e.acc||0,e.n||0,e.review||'']);});});download('typing_records_all.csv',rows.map(r=>r.map(csvEsc).join(',')).join('\n'));});
 
-// ===== 관리자: PDF로 지문 추가 =====
+// ===== 관리자: 파일로 지문 추가 (PDF·TXT·Word·Excel·한글hwpx) =====
 if(window.pdfjsLib){ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js'; }
-let pdfParsed=null;
+let pdfParsed=null, pdfFileName='';
+let LIBRARY=[];   // content/library 의 batches (파일 묶음 목록)
+
 async function extractPdfText(file){
   const buf=await file.arrayBuffer();
   const pdf=await pdfjsLib.getDocument({data:buf}).promise;
@@ -570,60 +606,155 @@ async function extractPdfText(file){
   for(let p=1;p<=pdf.numPages;p++){const page=await pdf.getPage(p);const tc=await page.getTextContent();text+=' '+tc.items.map(it=>it.str).join(' ');}
   return text;
 }
-function cleanPdfText(t){return t.replace(/(\w)-\s+(\w)/g,'$1$2').replace(/\s+/g,' ').replace(/[“”]/g,'"').replace(/[‘’]/g,"'").trim();}
+async function extractHwpxText(file){
+  if(!window.JSZip)throw new Error('압축 해제 라이브러리(JSZip) 로드 실패');
+  const zip=await JSZip.loadAsync(await file.arrayBuffer());let text='';
+  for(const n of Object.keys(zip.files)){if(/section\d+\.xml$/i.test(n)){const xml=await zip.files[n].async('string');text+=' '+xml.replace(/<[^>]+>/g,' ');}}
+  return text;
+}
+async function extractFileText(file){
+  const name=(file.name||'').toLowerCase();
+  if(name.endsWith('.pdf')){if(!window.pdfjsLib)throw new Error('PDF 라이브러리 로드 실패(인터넷 확인)');return await extractPdfText(file);}
+  if(name.endsWith('.txt'))return await file.text();
+  if(name.endsWith('.docx')){if(!window.mammoth)throw new Error('Word 라이브러리 로드 실패');const r=await mammoth.extractRawText({arrayBuffer:await file.arrayBuffer()});return r.value||'';}
+  if(name.endsWith('.xlsx')||name.endsWith('.xls')){if(!window.XLSX)throw new Error('Excel 라이브러리 로드 실패');const wb=XLSX.read(await file.arrayBuffer(),{type:'array'});let t='';wb.SheetNames.forEach(sn=>{t+=' '+XLSX.utils.sheet_to_csv(wb.Sheets[sn]).replace(/[,;\r]/g,' ');});return t;}
+  if(name.endsWith('.hwpx'))return await extractHwpxText(file);
+  if(name.endsWith('.hwp'))throw new Error('한글 .hwp(구버전)는 브라우저에서 직접 추출이 안 됩니다. 한글에서 PDF나 TXT로 저장 후 올려주세요.');
+  if(name.endsWith('.doc'))throw new Error('구버전 .doc는 지원이 어렵습니다. .docx나 PDF로 저장 후 올려주세요.');
+  throw new Error('지원하지 않는 형식입니다. (PDF·TXT·docx·xlsx·hwpx)');
+}
+function fileType(name){name=(name||'').toLowerCase();if(name.endsWith('.pdf'))return 'PDF';if(name.endsWith('.txt'))return 'TXT';if(name.endsWith('.docx'))return 'Word';if(name.endsWith('.xlsx')||name.endsWith('.xls'))return 'Excel';if(name.endsWith('.hwpx'))return '한글';return '파일';}
+function fmtNow(){const d=new Date(),p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());}
+
+function cleanPdfText(t){return t.replace(/(\w)-\s+(\w)/g,'$1$2').replace(/[“”]/g,'"').replace(/[‘’]/g,"'").replace(/[·•・∙‧⸳]/g,' ').replace(/[①-⓿❶-➓㉑-㊿]/g,'').replace(/\s+/g,' ').trim();}
 function splitSentences(t){
   const parts=t.match(/[^.!?]+[.!?]+(?=\s|$)/g)||[];const out=[];
-  for(let s of parts){s=s.trim();
+  for(let s of parts){s=sanitizeSentence(s.trim());
     if(s.length<12)continue;
+    if(hasHangul(s))continue;                     // 한글 포함 문장은 제외
     const letters=(s.match(/[A-Za-z]/g)||[]).length;
-    if(letters<s.length*0.5)continue;           // 한글 등 비영어 비중이 크면 제외
+    if(letters<s.length*0.5)continue;           // 영어 비중 낮으면 제외
     if(s.split(/\s+/).length<2)continue;          // 단어 2개 미만 제외
     out.push(s);}
   return out;
 }
 function classifyDiff(s){const n=s.length;if(n<45)return 'easy';if(n<90)return 'normal';if(n<150)return 'hard';return 'extreme';}
 function groupByDiff(sents){const g={easy:[],normal:[],hard:[],extreme:[]};sents.forEach(s=>g[classifyDiff(s)].push(s));return g;}
-function updateExtraCount(){const el=$('pdf-extra-count');if(!el)return;if(!EXTRA){el.textContent='현재 추가 지문: 0개';return;}let n=0;DIFFS.forEach(d=>n+=(EXTRA[d]||[]).length);el.textContent='현재 추가 지문: '+n+'개';}
+
+function mergeBatches(batches){const m={easy:[],normal:[],hard:[],extreme:[]};(batches||[]).forEach(b=>DIFFS.forEach(d=>{((b.sentences&&b.sentences[d])||[]).forEach(s=>{if(s)m[d].push(s);});}));return m;}
+function updateExtraCount(){const el=$('pdf-extra-count');if(!el)return;let n=0;DIFFS.forEach(d=>n+=((EXTRA&&EXTRA[d])||[]).length);el.textContent='추가 지문 '+n+'개 · 파일 '+LIBRARY.length+'개';}
+
 function renderPdfPreview(){
   const box=$('pdf-preview');box.classList.remove('hidden');
-  let h='<div style="color:var(--muted);font-size:13px;margin-bottom:8px">자동 분류 결과입니다. 한 줄에 한 문장이며, 직접 수정·삭제할 수 있어요. 저장하면 기존 추가 지문에 <b>합쳐집니다</b>.</div>';
+  let h='<div style="color:var(--muted);font-size:13px;margin-bottom:8px"><b>'+esc(pdfFileName)+'</b> 에서 추출했습니다. 한 줄에 한 문장이며 직접 수정·삭제할 수 있어요. 저장하면 아래 <b>파일 묶음</b>으로 기록됩니다.</div>';
   DIFFS.forEach(d=>{h+='<div style="margin-bottom:10px"><div style="font-weight:700;margin-bottom:4px"><span class="pill d-'+d+'">'+DLABEL[d]+'</span> '+pdfParsed[d].length+'문장</div><textarea id="pdf-ta-'+d+'" style="width:100%;min-height:64px;font-size:13px;font-family:monospace;background:rgba(15,23,42,.6);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px">'+esc(pdfParsed[d].join("\n"))+'</textarea></div>';});
-  h+='<div class="controls" style="justify-content:flex-start;margin-top:6px"><button class="primary" id="pdf-save">💾 추가 지문으로 저장</button><button class="ghost" id="pdf-clear-extra">🗑️ 추가 지문 전체 삭제</button><span id="pdf-save-msg" style="color:var(--ok);font-size:13px"></span></div>';
+  h+='<div class="controls" style="justify-content:flex-start;margin-top:6px"><button class="primary" id="pdf-save">💾 이 파일 묶음으로 저장</button><button class="ghost" id="pdf-cancel">취소</button><span id="pdf-save-msg" style="color:var(--ok);font-size:13px"></span></div>';
   box.innerHTML=h;
   $('pdf-save').addEventListener('click',savePdfSentences);
-  $('pdf-clear-extra').addEventListener('click',clearExtraSentences);
+  $('pdf-cancel').addEventListener('click',()=>{box.classList.add('hidden');pdfParsed=null;$('pdf-file').value='';$('pdf-status').textContent='';});
 }
 async function savePdfSentences(){
   const msg=$('pdf-save-msg');msg.style.color='var(--muted)';msg.textContent='저장 중...';
-  const cur=Object.assign({easy:[],normal:[],hard:[],extreme:[]},EXTRA||{});
-  DIFFS.forEach(d=>{const lines=(($('pdf-ta-'+d)&&$('pdf-ta-'+d).value)||'').split(/\n+/).map(s=>s.trim()).filter(s=>s.length>=8);cur[d]=Array.from(new Set([...(cur[d]||[]),...lines]));});
-  try{await setDoc(doc(db,'content','sentences'),cur);msg.style.color='var(--ok)';msg.textContent='✅ 저장됨! 이제 모두 이 지문으로 게임할 수 있어요.';}
+  const sentences={easy:[],normal:[],hard:[],extreme:[]};let total=0;
+  DIFFS.forEach(d=>{const lines=(($('pdf-ta-'+d)&&$('pdf-ta-'+d).value)||'').split(/\n+/).map(s=>s.trim()).filter(s=>s.length>=8);sentences[d]=Array.from(new Set(lines));total+=sentences[d].length;});
+  if(!total){msg.style.color='var(--bad)';msg.textContent='저장할 문장이 없습니다.';return;}
+  const batch={id:'b'+Date.now(),fileName:pdfFileName||'(이름없음)',type:fileType(pdfFileName),addedAt:fmtNow(),counts:{easy:sentences.easy.length,normal:sentences.normal.length,hard:sentences.hard.length,extreme:sentences.extreme.length,total},sentences};
+  try{await setDoc(doc(db,'content','library'),{batches:[...LIBRARY,batch]});msg.style.color='var(--ok)';msg.textContent='✅ 저장됨! ('+total+'문장) 이제 모두 이 지문으로 게임할 수 있어요.';$('pdf-preview').classList.add('hidden');pdfParsed=null;$('pdf-file').value='';$('pdf-status').textContent='';}
   catch(e){msg.style.color='var(--bad)';msg.textContent='저장 실패: '+e.message;}
 }
-async function clearExtraSentences(){
-  if(!confirm('추가했던 PDF 지문을 모두 삭제할까요?\n(기본 내장 지문은 그대로 유지됩니다)'))return;
-  const msg=$('pdf-save-msg');
-  try{await setDoc(doc(db,'content','sentences'),{easy:[],normal:[],hard:[],extreme:[]});msg.style.color='var(--ok)';msg.textContent='✅ 추가 지문을 모두 비웠습니다.';}
-  catch(e){msg.style.color='var(--bad)';msg.textContent='실패: '+e.message;}
+
+function renderBatchList(){
+  const el=$('batch-list');if(!el)return;
+  if(!LIBRARY.length){el.innerHTML='<div style="color:var(--muted);padding:10px">아직 추가한 파일이 없어요. 위에서 파일을 올려보세요.</div>';return;}
+  el.innerHTML=LIBRARY.slice().reverse().map(b=>{const c=b.counts||{};
+    return '<div class="row" style="align-items:center"><span><b>'+esc(b.fileName||'(이름없음)')+'</b> <span class="pill">'+esc(b.type||'파일')+'</span><br><span class="d" style="font-size:12px">'+esc(b.addedAt||'')+' · 총 '+(c.total||0)+'문장 (<span style="color:#4ade80">쉬'+(c.easy||0)+'</span> <span style="color:#38bdf8">보'+(c.normal||0)+'</span> <span style="color:#c4b5fd">상'+(c.hard||0)+'</span> <span style="color:#fbbf24">극'+(c.extreme||0)+'</span>)</span></span><button class="ghost" onclick="window.DELBATCH(\''+b.id+'\')" style="padding:5px 11px;font-size:12px;border-color:var(--bad);color:var(--bad)">🗑️ 삭제</button></div>';
+  }).join('');
 }
-const pdfExtractBtn=$('pdf-extract');
-if(pdfExtractBtn)pdfExtractBtn.addEventListener('click',async()=>{
-  const f=$('pdf-file').files[0];const st=$('pdf-status');
-  if(!f){st.style.color='var(--bad)';st.textContent='PDF 파일을 먼저 선택하세요.';return;}
-  if(!window.pdfjsLib){st.style.color='var(--bad)';st.textContent='PDF 라이브러리 로드 실패 — 인터넷 연결을 확인하세요.';return;}
-  st.style.color='var(--muted)';st.textContent='추출 중...';$('pdf-preview').classList.add('hidden');
+window.DELBATCH=async function(id){
+  const b=LIBRARY.find(x=>x.id===id);if(!b)return;
+  if(!confirm('"'+(b.fileName||'')+'" 묶음과 그 안의 '+((b.counts&&b.counts.total)||0)+'개 지문을 삭제할까요?\n(이 파일로 만든 지문이 게임에서 사라집니다. 기본 내장 지문은 유지됩니다.)'))return;
+  try{await setDoc(doc(db,'content','library'),{batches:LIBRARY.filter(x=>x.id!==id)});}
+  catch(e){alert('삭제 실패: '+e.message);}
+};
+
+async function handleUploadFile(f){
+  const st=$('pdf-status');if(!f)return;
+  pdfFileName=f.name||'';
+  st.style.color='var(--muted)';st.textContent='"'+pdfFileName+'" 추출 중...';$('pdf-preview').classList.add('hidden');
   try{
-    const sents=splitSentences(cleanPdfText(await extractPdfText(f)));
-    if(!sents.length){st.style.color='var(--bad)';st.textContent='추출된 영어 문장이 없습니다. (스캔 이미지 PDF는 글자가 안 잡힐 수 있어요)';pdfParsed=null;return;}
+    const sents=splitSentences(cleanPdfText(await extractFileText(f)));
+    if(!sents.length){st.style.color='var(--bad)';st.textContent='추출된 영어 문장이 없습니다. (스캔 이미지 PDF, 표/숫자 위주 파일은 안 잡힐 수 있어요)';pdfParsed=null;return;}
     pdfParsed=groupByDiff(sents);renderPdfPreview();
     st.style.color='var(--ok)';st.textContent='총 '+sents.length+'문장 추출됨. 아래에서 확인·수정 후 저장하세요.';
-  }catch(e){st.style.color='var(--bad)';st.textContent='오류: '+e.message;}
-});
+  }catch(e){st.style.color='var(--bad)';st.textContent='⚠️ '+e.message;pdfParsed=null;}
+}
+{const dz=$('drop-zone'),fi=$('pdf-file');
+  if(dz&&fi){
+    dz.addEventListener('click',()=>fi.click());
+    fi.addEventListener('change',()=>{if(fi.files[0])handleUploadFile(fi.files[0]);});
+    ['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.style.borderColor='var(--accent-2)';dz.style.background='rgba(56,189,248,.08)';}));
+    ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.style.borderColor='';dz.style.background='';}));
+    dz.addEventListener('drop',e=>{const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];if(f)handleUploadFile(f);});
+  }
+}
+
+// 문장 수동 추가
+async function manualAdd(){
+  const msg=$('manual-msg');
+  const lines=($('manual-text').value||'').split(/\n+/).map(s=>sanitizeSentence(s)).filter(s=>s.length>=8 && !hasHangul(s) && /[A-Za-z]/.test(s));
+  if(!lines.length){msg.style.color='var(--bad)';msg.textContent='추가할 영어 문장이 없습니다. (한글 문장은 제외돼요)';return;}
+  const sel=$('manual-diff').value;
+  const sentences={easy:[],normal:[],hard:[],extreme:[]};
+  lines.forEach(s=>{const d=(sel==='auto')?classifyDiff(s):sel;sentences[d].push(s);});
+  DIFFS.forEach(d=>sentences[d]=Array.from(new Set(sentences[d])));
+  const total=DIFFS.reduce((a,d)=>a+sentences[d].length,0);
+  const batch={id:'b'+Date.now(),fileName:'수동 입력',type:'수동',addedAt:fmtNow(),counts:{easy:sentences.easy.length,normal:sentences.normal.length,hard:sentences.hard.length,extreme:sentences.extreme.length,total},sentences};
+  msg.style.color='var(--muted)';msg.textContent='저장 중...';
+  try{await setDoc(doc(db,'content','library'),{batches:[...LIBRARY,batch]});msg.style.color='var(--ok)';msg.textContent='✅ '+total+'문장 추가됨';$('manual-text').value='';}
+  catch(e){msg.style.color='var(--bad)';msg.textContent='저장 실패: '+e.message;}
+}
+{const ma=$('manual-add');if(ma)ma.addEventListener('click',manualAdd);}
+
+// ===== 접속 기록 · 부관리자 관리 (총관리자 전용) =====
+let PRESENCE_MAP={};
+async function loadAccessHistory(){
+  try{const s=await getDocs(collection(db,'presence'));PRESENCE_MAP={};s.forEach(d=>{const x=d.data();PRESENCE_MAP[d.id]=(x.lastSeen&&x.lastSeen.toMillis)?x.lastSeen.toMillis():0;});}catch(e){}
+  renderAccessList();
+}
+function renderAccessList(){
+  const el=$('access-list');if(!el)return;
+  const list=usersCache.slice().sort((a,b)=>(PRESENCE_MAP[b.email]||0)-(PRESENCE_MAP[a.email]||0));
+  const inf=$('acc-info');if(inf)inf.textContent='총 '+list.length+'명';
+  el.innerHTML=list.map(u=>{
+    const tag=roleTag(u.name,u.isAdmin)||'학생';
+    const last=PRESENCE_MAP[u.email]?fmtTs(PRESENCE_MAP[u.email]):'기록 없음';
+    let ctrl;
+    if(u.isAdmin){ ctrl='<span style="color:var(--accent);font-weight:700">총관리자</span>'; }
+    else{
+      const sub=!!u.subAdmin;
+      ctrl='<label style="margin-right:10px;font-weight:700;color:var(--accent-2)"><input type="checkbox" class="sub-chk" data-email="'+esc(u.email)+'" '+(sub?'checked':'')+'> 부관리자</label>'
+        + PERMS.map(p=>'<label style="margin-right:10px;opacity:'+(sub?1:.4)+'"><input type="checkbox" class="perm-chk" data-email="'+esc(u.email)+'" data-perm="'+p.key+'" '+(((u.perms||[]).includes(p.key))?'checked':'')+(sub?'':' disabled')+'> '+p.label+'</label>').join('');
+    }
+    return '<div class="row" style="flex-direction:column;align-items:flex-start;gap:5px;padding:9px 4px"><div><b>'+esc(dispName(u.name)||u.email)+'</b> <span class="pill">'+tag+'</span> <span class="d" style="font-size:11px">'+esc(u.email)+'</span> <span class="d" style="font-size:11px">· 최근 '+last+'</span></div><div style="font-size:12.5px">'+ctrl+'</div></div>';
+  }).join('');
+  el.querySelectorAll('.sub-chk').forEach(c=>c.addEventListener('change',()=>setSubAdmin(c.dataset.email,c.checked)));
+  el.querySelectorAll('.perm-chk').forEach(c=>c.addEventListener('change',()=>togglePerm(c.dataset.email,c.dataset.perm,c.checked)));
+}
+async function setSubAdmin(email,on){
+  const upd=on?{subAdmin:true}:{subAdmin:false,perms:[]};
+  try{await updateDoc(doc(db,'users',email),upd);}catch(e){alert('실패: '+e.message);}
+}
+async function togglePerm(email,perm,on){
+  const u=usersCache.find(x=>x.email===email);if(!u)return;
+  let perms=Array.isArray(u.perms)?u.perms.slice():[];
+  if(on){if(!perms.includes(perm))perms.push(perm);}else{perms=perms.filter(p=>p!==perm);}
+  try{await updateDoc(doc(db,'users',email),{perms,subAdmin:true});}catch(e){alert('실패: '+e.message);}
+}
 
 // ===== 대회 모드 =====
 function updateContestBtn(){const b=$('contest-btn');if(!b)return;
   if(CONTEST_INFO&&CONTEST_INFO.active){b.classList.add('live');b.textContent='🏆 대회 진행중 — 입장!';}
-  else{b.classList.remove('live');b.textContent=(ME&&ME.isAdmin)?'🏆 대회 개설':'🏆 대회 모드';}}
+  else{b.classList.remove('live');b.textContent=can('contest')?'🏆 대회 개설':'🏆 대회 모드';}}
 function openContest(){renderContest();$('contest-overlay').classList.add('show');}
 function renderContest(){
   const body=$('ct-body');const info=(CONTEST_INFO&&CONTEST_INFO.active)?CONTEST_INFO:null;let h='';
@@ -631,8 +762,8 @@ function renderContest(){
     h+='<div style="text-align:center;margin-bottom:10px"><div style="font-size:18px;font-weight:800;color:var(--accent)">'+esc(info.title)+'</div><div style="color:var(--muted);font-size:13px;margin-top:4px">난이도 <span class="pill d-'+info.difficulty+'">'+(DLABEL[info.difficulty]||info.difficulty)+'</span></div></div>';
     h+='<div style="margin:10px 0"><label style="font-size:13px;color:var(--muted)">입장 비밀번호</label><div style="display:flex;gap:8px;margin-top:5px"><input id="ct-pw" type="password" placeholder="비밀번호" style="flex:1;font-size:15px;padding:10px;border-radius:9px;border:1px solid var(--line);background:rgba(15,23,42,.6);color:var(--text)"><button class="primary" id="ct-join">입장 ▶</button></div><div id="ct-msg" style="font-size:13px;color:var(--bad);margin-top:5px"></div></div>';
     h+='<div class="card-title" style="margin-top:8px"><span>🏆 대회 순위</span><button class="ghost" id="ct-rank-refresh" style="padding:4px 10px;font-size:12px">새로고침</button></div><div id="ct-rank" class="logbox" style="max-height:200px;overflow:auto"><div style="color:var(--muted);padding:10px">불러오는 중...</div></div>';
-    if(ME&&ME.isAdmin)h+='<div class="controls" style="margin-top:12px;justify-content:center"><button id="ct-close-room" style="border-color:var(--bad);color:var(--bad)">⛔ 이 대회 종료</button></div>';
-  } else if(ME&&ME.isAdmin){
+    if(can('contest'))h+='<div class="controls" style="margin-top:12px;justify-content:center"><button id="ct-close-room" style="border-color:var(--bad);color:var(--bad)">⛔ 이 대회 종료</button></div>';
+  } else if(can('contest')){
     h+='<div style="color:var(--muted);font-size:13px;margin-bottom:10px">대회를 개설하면 학생들이 비밀번호로 입장할 수 있어요. <b>(관리자 전용)</b></div>';
     h+='<label style="font-size:13px;color:var(--muted)">대회 이름</label><input id="ct-f-title" placeholder="예: 1학년 3반 영타 대회" style="width:100%;font-size:15px;padding:10px;border-radius:9px;border:1px solid var(--line);background:rgba(15,23,42,.6);color:var(--text);margin:5px 0 10px">';
     h+='<label style="font-size:13px;color:var(--muted)">입장 비밀번호</label><input id="ct-f-pw" placeholder="비밀번호" style="width:100%;font-size:15px;padding:10px;border-radius:9px;border:1px solid var(--line);background:rgba(15,23,42,.6);color:var(--text);margin:5px 0 10px">';
@@ -650,7 +781,7 @@ function renderContest(){
     loadContestRank(info.id);
   } else { const c=$('ct-create');if(c)c.onclick=createContest; }
 }
-function loadContestRank(id){fetchContestRanking(id).then(rows=>{const el=$('ct-rank');if(!el)return;el.innerHTML=rows.length?rows.map((r,i)=>'<div class="row"><span>'+(i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1)+'.')+' <b>'+esc(r.name)+'</b></span><span><b class="accent">'+r.score+'</b>점 · '+r.cpm+'타·'+r.acc+'%</span></div>').join(''):'<div style="color:var(--muted);padding:10px;text-align:center">아직 참가자가 없어요.</div>';});}
+function loadContestRank(id){fetchContestRanking(id).then(rows=>{const el=$('ct-rank');if(!el)return;el.innerHTML=rows.length?rows.map((r,i)=>'<div class="row"><span>'+(i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1)+'.')+' <b>'+esc(dispName(r.name))+'</b></span><span><b class="accent">'+r.score+'</b>점 · '+r.cpm+'타·'+r.acc+'%</span></div>').join(''):'<div style="color:var(--muted);padding:10px;text-align:center">아직 참가자가 없어요.</div>';});}
 async function createContest(){
   const title=($('ct-f-title').value||'').trim()||'천하제일 영타 대회';const pw=($('ct-f-pw').value||'').trim();
   if(!pw){alert('입장 비밀번호를 설정하세요.');return;}
@@ -677,7 +808,7 @@ async function renderContestWinners(){
     const s=await getDocs(query(collection(db,'records'),where('contest','==',true)));
     const byC={};s.forEach(d=>{const r=d.data();const id=r.contestId||'?';if(!byC[id]||(r.score||0)>byC[id].score)byC[id]={id,title:r.contestTitle||'대회',name:r.name||r.email,score:r.score||0,cpm:r.cpm||0,acc:r.acc||0,diff:r.difficulty};});
     const list=Object.values(byC).sort((a,b)=>a.id<b.id?1:-1);   // 최신 대회 먼저
-    el.innerHTML=list.length?list.map(c=>'<div class="row" style="align-items:center"><span><span class="pill'+(c.diff?' d-'+c.diff:'')+'">'+esc(c.title)+'</span><br><span style="font-size:15px">🥇 <b>'+esc(c.name)+'</b></span></span><span style="text-align:right"><b class="accent" style="font-size:16px">'+c.score+'</b>점<br><span class="d" style="font-size:12px">'+c.cpm+'타·'+c.acc+'%</span></span></div>').join(''):'<div style="color:var(--muted);padding:18px;text-align:center">아직 진행된 대회가 없어요.<br>🏆 대회 모드에서 대회를 열어보세요!</div>';
+    el.innerHTML=list.length?list.map(c=>'<div class="row" style="align-items:center"><span><span class="pill'+(c.diff?' d-'+c.diff:'')+'">'+esc(c.title)+'</span><br><span style="font-size:15px">🥇 <b>'+esc(dispName(c.name))+'</b></span></span><span style="text-align:right"><b class="accent" style="font-size:16px">'+c.score+'</b>점<br><span class="d" style="font-size:12px">'+c.cpm+'타·'+c.acc+'%</span></span></div>').join(''):'<div style="color:var(--muted);padding:18px;text-align:center">아직 진행된 대회가 없어요.<br>🏆 대회 모드에서 대회를 열어보세요!</div>';
   }catch(e){el.innerHTML='<div style="color:var(--bad);padding:12px;text-align:center">불러오기 실패</div>';}
 }
 {const cw=$('cw-refresh');if(cw)cw.addEventListener('click',renderContestWinners);}
@@ -694,19 +825,23 @@ if(auth){
     const email=(user.email||'').toLowerCase();
     if(C.allowedDomain && !email.endsWith('@'+C.allowedDomain)){ alert('학교('+C.allowedDomain+') 계정만 사용할 수 있습니다.'); await signOut(auth); return; }
     const isAdmin=(C.adminEmails||[]).map(x=>x.toLowerCase()).includes(email);
-    const isTeacher=isAdmin||(C.teacherEmails||[]).map(x=>x.toLowerCase()).includes(email);
-    const baseName=user.displayName||email.split('@')[0];
-    ME={email, role:isTeacher?'teacher':'student', isAdmin, displayName:isTeacher?(baseName+' 선생님'):baseName};
+    const baseName=(user.displayName||email.split('@')[0]).trim();
+    const isTeacher=isAdmin||isTeacherName(baseName)||(C.teacherEmails||[]).map(x=>x.toLowerCase()).includes(email);
+    ME={email, role:isTeacher?'teacher':'student', isAdmin, displayName:baseName};
     // 내 문서 보장 + 실시간 구독
     const uref=doc(db,'users',email);
     const snap=await getDoc(uref).catch(()=>null);
     if(!snap||!snap.exists()) await setDoc(uref,{email,name:ME.displayName,role:ME.role,isAdmin,best:{},createdAt:serverTimestamp()}).catch(()=>{});
     else if(snap.data().name!==ME.displayName) await updateDoc(uref,{name:ME.displayName,role:ME.role,isAdmin}).catch(()=>{});
-    onSnapshot(uref,d=>{if(d.exists()){myData=d.data();myData.best=myData.best||{};updateQbar();if(!$('view-home').classList.contains('hidden'))renderRadar();}});
+    onSnapshot(uref,d=>{if(d.exists()){myData=d.data();myData.best=myData.best||{};
+      ME.subAdmin=!ME.isAdmin&&!!myData.subAdmin; ME.perms=Array.isArray(myData.perms)?myData.perms:[];
+      renderNav(); updateContestBtn();
+      updateQbar();if(!$('view-home').classList.contains('hidden'))renderRadar();
+      if(!$('view-admin').classList.contains('hidden'))renderAdmin();}});
     // 전체 사용자 실시간(순위표)
     onSnapshot(collection(db,'users'),snap=>{usersCache=[];snap.forEach(d=>usersCache.push(d.data()));renderLeaderboard();renderHallOfFame();if(!$('view-admin').classList.contains('hidden'))renderAdmin();});
     // 공용 지문
-    onSnapshot(doc(db,'content','sentences'),d=>{EXTRA=d.exists()?d.data():null;updateExtraCount();});
+    onSnapshot(doc(db,'content','library'),d=>{LIBRARY=d.exists()?(d.data().batches||[]):[];EXTRA=mergeBatches(LIBRARY);updateExtraCount();renderBatchList();});
     // 대회 상태 실시간
     onSnapshot(doc(db,'contests','current'),d=>{CONTEST_INFO=d.exists()?d.data():null;updateContestBtn();if($('contest-overlay').classList.contains('show'))renderContest();});
     watchPresence(); heartbeat(); setInterval(heartbeat,30000);
