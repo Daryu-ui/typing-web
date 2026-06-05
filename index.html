@@ -45,7 +45,7 @@
   .subtab{padding:9px 16px;border-radius:999px;background:rgba(39,53,73,.7);color:var(--muted);font-weight:700;}
   .subtab.active{background:linear-gradient(92deg,var(--accent),#f59e0b);color:#1a1300;}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:22px;margin-bottom:18px;box-shadow:0 12px 40px rgba(0,0,0,.28);backdrop-filter:blur(10px);}
-  .card h2{margin:0 0 14px;font-size:20px;} .card-title{color:var(--muted);font-size:13px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;}
+  .card h2{margin:0 0 14px;font-size:20px;} .card-title{color:var(--text);font-size:17px;font-weight:800;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;}
   .accent{color:var(--accent);}
   .subtabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
   table{width:100%;border-collapse:collapse;} th,td{padding:10px 9px;text-align:center;border-bottom:1px solid var(--line);font-size:14.5px;} th{color:var(--muted);font-size:12.5px;}
@@ -144,7 +144,7 @@
         </div>
       </div>
       <div class="card hh-side">
-        <div class="card-title" style="margin-bottom:8px;justify-content:center"><span>🏆 대회별 1등</span></div>
+        <div class="card-title" style="margin-bottom:8px;justify-content:center"><span>🏆 대회별 1위</span></div>
         <div id="contest-winners" class="logbox" style="height:166px;overflow:auto"></div>
       </div>
     </div>
@@ -161,13 +161,13 @@
         <button class="subtab d-extreme active" data-diff="extreme">극상</button>
       </div>
       <div id="lb-scroll">
-        <table><thead><tr><th>순위</th><th>이름</th><th>점수</th><th>타수</th><th>정확도</th><th>도전</th><th>후기</th></tr></thead><tbody id="lb-body"></tbody></table>
+        <table><thead><tr><th>순위</th><th style="text-align:left">이름</th><th>달성</th><th>점수</th><th>타수</th><th>정확도</th><th>도전</th><th>후기</th></tr></thead><tbody id="lb-body"></tbody></table>
       </div>
       <div class="empty hidden" id="lb-empty">아직 순위에 오른 사람이 없어요. 이 난이도를 <b id="qc2">3</b>번 이상 도전해보세요!</div>
     </div>
 
     <div class="home-bottom" style="align-items:start;">
-      <div class="card"><div class="card-title">📊 내 능력치</div><canvas id="radar" height="240"></canvas></div>
+      <div class="card"><div class="card-title">📊 내 능력치</div><canvas id="radar" height="320"></canvas></div>
       <div class="card"><div class="card-title"><span>🧾 내 최근 게임 로그</span><button class="ghost" id="mylog-refresh" style="padding:5px 11px;font-size:12px">새로고침</button></div><div id="mylog" class="logbox" style="max-height:300px;overflow:auto"></div></div>
     </div>
   </section>
@@ -456,7 +456,7 @@ function submitRecord(diff,cpm,acc,time,extra){
   if(!ME){extra.textContent='※ 로그인하면 기록이 저장됩니다.';return;}
   const score=Math.round(cpm*acc/100);
   const e=Object.assign({n:0,score:0,cpm:0,acc:0,review:''},(myData.best&&myData.best[diff])||{});
-  e.n=(e.n||0)+1;let isBest=false;if(score>e.score){e.score=score;e.cpm=cpm;e.acc=acc;isBest=true;}
+  e.n=(e.n||0)+1;let isBest=false;if(score>e.score){e.score=score;e.cpm=cpm;e.acc=acc;e.ts=Date.now();isBest=true;}
   myData.best=myData.best||{};myData.best[diff]=e;
   const upd={};upd['best.'+diff]=e;upd.updatedAt=serverTimestamp();
   updateDoc(doc(db,'users',ME.email),upd).catch(()=>{});
@@ -550,7 +550,7 @@ document.querySelectorAll('#lb-tabs .subtab').forEach(t=>t.addEventListener('cli
 $('lb-refresh').addEventListener('click',()=>{renderLeaderboard();startScroll();});
 function renderLeaderboard(){
   const rows=[];
-  usersCache.forEach(u=>{const e=u.best&&u.best[curDiff];if(e&&(e.n||0)>=QUALIFY)rows.push({name:u.name||u.email,score:e.score||0,cpm:e.cpm||0,acc:e.acc||0,n:e.n||0,review:e.review||'',email:u.email});});
+  usersCache.forEach(u=>{const e=u.best&&u.best[curDiff];if(e&&(e.n||0)>=QUALIFY)rows.push({name:u.name||u.email,score:e.score||0,cpm:e.cpm||0,acc:e.acc||0,n:e.n||0,review:e.review||'',email:u.email,ts:e.ts});});
   rows.sort((a,b)=>b.score-a.score||b.cpm-a.cpm);
   const top=rows.slice(0,30);
   $('lb-empty').classList.toggle('hidden',top.length>0);
@@ -559,7 +559,7 @@ function renderLeaderboard(){
   top.forEach((r,i)=>{const tr=document.createElement('tr');if(ME&&r.email===ME.email)tr.className='me';
     const med=i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1);
     let rev=r.review?esc(r.review):'';if(ME&&r.email===ME.email)rev=(r.review?'<span style="color:var(--accent-2)">'+esc(r.review)+'</span> ':'')+'<button onclick="window.EDITREV()" style="padding:3px 8px;font-size:12px">✏️</button>';
-    tr.innerHTML='<td class="medal">'+med+'</td><td class="name">'+esc(dispName(r.name))+'</td><td><b class="accent">'+r.score.toLocaleString()+'</b></td><td>'+r.cpm.toLocaleString()+'</td><td>'+r.acc+'%</td><td>'+r.n+'회</td><td style="text-align:left;font-size:13px">'+rev+'</td>';
+    tr.innerHTML='<td class="medal">'+med+'</td><td class="name">'+esc(dispName(r.name))+'</td><td style="font-size:12px;color:var(--muted)">'+(r.ts?fmtTs(r.ts):'-')+'</td><td><b class="accent">'+r.score.toLocaleString()+'</b></td><td>'+r.cpm.toLocaleString()+'</td><td>'+r.acc+'%</td><td>'+r.n+'회</td><td style="text-align:center;font-size:13px">'+rev+'</td>';
     body.appendChild(tr);});
 }
 window.EDITREV=function(){const e=myData.best&&myData.best[curDiff];const t=prompt('['+DLABEL[curDiff]+'] 후기 (최대 120자)',(e&&e.review)||'');if(t===null)return;const ee=Object.assign({n:0,score:0,cpm:0,acc:0,review:''},e||{});ee.review=t.slice(0,120);const upd={};upd['best.'+curDiff]=ee;updateDoc(doc(db,'users',ME.email),upd).catch(()=>{});};
@@ -589,7 +589,8 @@ function statValues(best){
   const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:0;const cl=v=>Math.max(0,Math.min(100,Math.round(v)));
   return {labels:['속도','순발력','정확도','안정성','꾸준함','도전'],data:[cl(avg(cpms)/4.5),cl(maxCpm/5),cl(avg(accs)),cl(minAcc==null?0:minAcc),cl(totalN*4),cl(hardN*8)]};
 }
-function renderRadarOn(id,best){if(!window.Chart)return;const el=$(id);if(!el)return;const v=statValues(best);if(RADARS[id])RADARS[id].destroy();Chart.defaults.color='#9aa6c0';RADARS[id]=new Chart(el.getContext('2d'),{type:'radar',data:{labels:v.labels,datasets:[{data:v.data,backgroundColor:'rgba(251,191,36,.2)',borderColor:'#fbbf24',pointBackgroundColor:'#38bdf8',borderWidth:2}]},options:{plugins:{legend:{display:false}},scales:{r:{min:0,max:100,ticks:{display:false,stepSize:20},grid:{color:'rgba(148,163,184,.2)'},angleLines:{color:'rgba(148,163,184,.2)'},pointLabels:{font:{size:13}}}}}});}
+const RADAR_COLORS=['#fbbf24','#38bdf8','#22c55e','#a78bfa','#f472b6','#fb923c']; // 속도·순발력·정확도·안정성·꾸준함·도전
+function renderRadarOn(id,best){if(!window.Chart)return;const el=$(id);if(!el)return;const v=statValues(best);if(RADARS[id])RADARS[id].destroy();Chart.defaults.color='#9aa6c0';const big=id==='radar';RADARS[id]=new Chart(el.getContext('2d'),{type:'radar',data:{labels:v.labels,datasets:[{data:v.data,backgroundColor:'rgba(251,191,36,.2)',borderColor:'#fbbf24',pointBackgroundColor:'#38bdf8',borderWidth:2}]},options:{layout:{padding:big?10:2},plugins:{legend:{display:false}},scales:{r:{min:0,max:100,ticks:{display:false,stepSize:20},grid:{color:'rgba(148,163,184,.2)'},angleLines:{color:'rgba(148,163,184,.2)'},pointLabels:{font:{size:big?34:13,weight:'800'},color:ctx=>RADAR_COLORS[ctx.index]||'#9aa6c0'}}}}});}
 function renderRadar(){if(ME)renderRadarOn('radar',myData.best);}
 function renderRecChart(){const el=$('rec-chart');if(!el||!window.Chart)return;const b=myData.best||{};if(RADARS['rec-chart'])RADARS['rec-chart'].destroy();RADARS['rec-chart']=new Chart(el.getContext('2d'),{type:'bar',data:{labels:['쉬움','보통','상급','극상'],datasets:[{label:'최고점수',data:DIFFS.map(d=>(b[d]&&b[d].score)||0),backgroundColor:['#22c55e','#38bdf8','#a78bfa','#fbbf24'],borderRadius:6}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});}
 function tsms(t){return t&&t.toMillis?t.toMillis():0;}
@@ -599,7 +600,7 @@ async function fetchLogs(email,n){try{const s=await getDocs(query(collection(db,
 function renderMyLog(){if($('mylog'))fetchLogs(ME.email,30).then(r=>$('mylog').innerHTML=logHtml(r));}
 $('mylog-refresh').addEventListener('click',renderMyLog);
 let hofTimer=null,hofIdx=0;
-function renderHallOfFame(){const el=$('hof-list');if(!el)return;el.innerHTML='';DIFFS.forEach(d=>{let top=null;usersCache.forEach(u=>{const e=u.best&&u.best[d];if(e&&(e.n||0)>=QUALIFY){if(!top||e.score>top.score)top={name:u.name||u.email,score:e.score};}});const div=document.createElement('div');div.className='hof';div.innerHTML='<span class="pill d-'+d+'">'+DLABEL[d]+'</span><span>'+(top?('🥇 <b>'+top.score+'</b> '+esc(dispName(top.name))):'<span style="color:var(--muted)">아직 없음</span>')+'</span>';el.appendChild(div);});}
+function renderHallOfFame(){const el=$('hof-list');if(!el)return;el.innerHTML='';DIFFS.forEach(d=>{let top=null;usersCache.forEach(u=>{const e=u.best&&u.best[d];if(e&&(e.n||0)>=QUALIFY){if(!top||e.score>top.score)top={name:u.name||u.email,score:e.score,ts:e.ts};}});const div=document.createElement('div');div.className='hof';div.innerHTML='<span class="pill d-'+d+'">'+DLABEL[d]+'</span><span>'+(top?('🥇 <b>'+top.score+'</b> '+esc(dispName(top.name))+(top.ts?' <span class="d" style="font-size:11px">'+fmtTs(top.ts)+'</span>':'')):'<span style="color:var(--muted)">아직 없음</span>')+'</span>';el.appendChild(div);});}
 function startHof(){stopHof();}   /* 난이도별 1위는 자동 스크롤 없이 4줄 고정 표시 */
 function stopHof(){if(hofTimer){clearInterval(hofTimer);hofTimer=null;}}
 
@@ -851,7 +852,7 @@ function joinContest(){
   CONTEST={id:info.id,title:info.title,difficulty:info.difficulty};inContest=true;diffEl.value=info.difficulty;exMode='practice';
   $('contest-overlay').classList.remove('show');GO('game');
 }
-async function fetchContestRanking(id){try{const s=await getDocs(query(collection(db,'records'),where('contestId','==',id)));const best={};s.forEach(d=>{const r=d.data();const k=r.email||r.name;if(!best[k]||(r.score||0)>best[k].score)best[k]={name:r.name||r.email,score:r.score||0,cpm:r.cpm||0,acc:r.acc||0};});return Object.values(best).sort((a,b)=>b.score-a.score);}catch(e){return [];}}
+async function fetchContestRanking(id){try{const s=await getDocs(query(collection(db,'records'),where('contestId','==',id)));const best={};s.forEach(d=>{const r=d.data();const k=r.email||r.name;if(!best[k]||(r.score||0)>best[k].score)best[k]={name:r.name||r.email,score:r.score||0,cpm:r.cpm||0,acc:r.acc||0,ts:r.ts};});return Object.values(best).sort((a,b)=>b.score-a.score);}catch(e){return [];}}
 {const cb=$('contest-btn');if(cb)cb.addEventListener('click',()=>{if(!ME){GO('login');return;}openContest();});}
 $('ct-close').addEventListener('click',()=>$('contest-overlay').classList.remove('show'));
 
@@ -861,9 +862,9 @@ async function renderContestWinners(){
   el.innerHTML='<div style="color:var(--muted);padding:12px;text-align:center">불러오는 중...</div>';
   try{
     const s=await getDocs(query(collection(db,'records'),where('contest','==',true)));
-    const byC={};s.forEach(d=>{const r=d.data();const id=r.contestId||'?';if(!byC[id]||(r.score||0)>byC[id].score)byC[id]={id,title:r.contestTitle||'대회',name:r.name||r.email,score:r.score||0,cpm:r.cpm||0,acc:r.acc||0,diff:r.difficulty};});
+    const byC={};s.forEach(d=>{const r=d.data();const id=r.contestId||'?';if(!byC[id]||(r.score||0)>byC[id].score)byC[id]={id,title:r.contestTitle||'대회',name:r.name||r.email,score:r.score||0,cpm:r.cpm||0,acc:r.acc||0,diff:r.difficulty,ts:r.ts};});
     const list=Object.values(byC).sort((a,b)=>a.id<b.id?1:-1);   // 최신 대회 먼저
-    el.innerHTML=list.length?list.map(c=>'<div class="row" style="align-items:center"><span><span class="pill'+(c.diff?' d-'+c.diff:'')+'">'+esc(c.title)+'</span><br><span style="font-size:15px">🥇 <b>'+esc(dispName(c.name))+'</b></span></span><span style="text-align:right"><b class="accent" style="font-size:16px">'+c.score+'</b>점<br><span class="d" style="font-size:12px">'+c.cpm+'타·'+c.acc+'%</span></span></div>').join(''):'<div style="color:var(--muted);padding:18px;text-align:center">아직 진행된 대회가 없어요.<br>🏆 대회 모드에서 대회를 열어보세요!</div>';
+    el.innerHTML=list.length?list.map(c=>'<div class="row" style="align-items:center"><span><span class="pill'+(c.diff?' d-'+c.diff:'')+'">'+esc(c.title)+'</span>'+(c.ts?' <span class="d" style="font-size:11px">'+fmtTs(c.ts)+'</span>':'')+'<br><span style="font-size:15px">🥇 <b>'+esc(dispName(c.name))+'</b></span></span><span style="text-align:right"><b class="accent" style="font-size:16px">'+c.score+'</b>점<br><span class="d" style="font-size:12px">'+c.cpm+'타·'+c.acc+'%</span></span></div>').join(''):'<div style="color:var(--muted);padding:18px;text-align:center">아직 진행된 대회가 없어요.<br>🏆 대회 모드에서 대회를 열어보세요!</div>';
   }catch(e){el.innerHTML='<div style="color:var(--bad);padding:12px;text-align:center">불러오기 실패</div>';}
 }
 {const cw=$('cw-refresh');if(cw)cw.addEventListener('click',renderContestWinners);}
